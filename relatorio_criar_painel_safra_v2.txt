@@ -1,0 +1,9 @@
+RELATÓRIO — CRIAR PAINEL SAFRA V2
+Data/hora: 2026-06-26 11:08:03
+Raiz: C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO
+dash_safra.py: C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO\areas\adm\desconexao\dash_safra.py — EXISTE=True
+dash_safra.html: C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO\areas\adm\desconexao\templates\dash_safra.html — EXISTE=True
+Registro Flask: JÁ REGISTRADO em C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO\app.py
+Backups: C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO\areas\adm\desconexao\dash_safra.py.bak_20260626_110803, C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO\areas\adm\desconexao\templates\dash_safra.html.bak_20260626_110803
+Rotas: /dash/safra/ | /dash/safra/api/options | /dash/safra/api/data
+Reinicie o Flask antes de testar.

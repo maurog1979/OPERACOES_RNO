@@ -1,0 +1,19 @@
+<nav class="navbar">
+  <div class="nav-left">
+    <a href="{{ url_for('home') }}" class="logo-link" title="Voltar para home">
+      <div class="logo">claro</div>
+    </a>
+    <div class="brand-text">
+      <span class="brand-main">Portal de Relatórios</span>
+      <span class="brand-sub">OPERAÇÕES RNO</span>
+    </div>
+  </div>
+  <div class="nav-right">
+    <button class="notification-btn" title="Notificações">
+      <i class="fa-regular fa-bell"></i>
+      <span class="badge"></span>
+    </button>
+    <span class="user-name">{{ USER_NAME }}</span>
+    <div class="avatar">{{ USER_INITIALS }}</div>
+  </div>
+</nav>

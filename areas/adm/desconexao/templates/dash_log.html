@@ -1,0 +1,814 @@
+{% extends "base.html" %}
+{% block title %}LOG & Reincidência | Operações RNO{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css">
+<script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+
+<style>
+  :root {
+    --claro-red: #E60000;
+    --claro-red-dark: #B71C1C;
+    --green: #2E7D32;
+    --blue: #1565C0;
+    --orange: #F57C00;
+    --yellow: #F9A825;
+    --gray: #9E9E9E;
+    --soft-bg: #F5F6FA;
+    --line: #E5E7EB;
+    --shadow: 0 14px 35px rgba(15, 23, 42, 0.10);
+  }
+
+  html, body {
+    background: var(--soft-bg) !important;
+    overflow-x: hidden;
+  }
+
+  .log-page {
+    padding: 18px 22px 32px;
+    background:
+      radial-gradient(circle at top left, rgba(230,0,0,0.10), transparent 32%),
+      radial-gradient(circle at bottom right, rgba(21,101,192,0.08), transparent 36%),
+      var(--soft-bg);
+    font-family: Inter, "Segoe UI", Arial, sans-serif;
+  }
+
+  .dash-hero {
+    background: linear-gradient(120deg, #E60000 0%, #B71C1C 58%, #7F1111 100%);
+    color: white;
+    padding: 18px 22px;
+    border-radius: 22px;
+    box-shadow: var(--shadow);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+
+  .dash-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .dash-icon {
+    width: 58px;
+    height: 58px;
+    border-radius: 18px;
+    background: rgba(255,255,255,0.16);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 23px;
+    font-weight: 900;
+  }
+
+  .dash-title {
+    margin: 0;
+    font-size: 1.55rem;
+    font-weight: 900;
+    letter-spacing: -0.03em;
+  }
+
+  .dash-subtitle {
+    margin: 4px 0 0;
+    opacity: 0.90;
+    font-size: 0.92rem;
+    font-weight: 600;
+  }
+
+  .btn-voltar {
+    color: white !important;
+    text-decoration: none !important;
+    border: 1px solid rgba(255,255,255,0.32);
+    background: rgba(255,255,255,0.13);
+    padding: 9px 14px;
+    border-radius: 999px;
+    font-weight: 800;
+    font-size: 0.88rem;
+  }
+
+  .log-filter-bar {
+    background: rgba(255,255,255,0.94);
+    border: 1px solid rgba(229,231,235,0.95);
+    border-radius: 18px;
+    box-shadow: 0 8px 22px rgba(15,23,42,0.07);
+    padding: 14px 18px 16px;
+    margin-bottom: 18px;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(170px, 1fr));
+    gap: 14px 16px;
+    position: relative;
+    z-index: 500;
+  }
+
+  .filter-item label {
+    display: block;
+    font-size: 0.72rem;
+    font-weight: 900;
+    color: #374151;
+    margin-bottom: 5px;
+    letter-spacing: .035em;
+  }
+
+  .choices {
+    margin-bottom: 0 !important;
+    font-size: 0.84rem !important;
+  }
+
+  .choices__inner {
+    min-height: 42px !important;
+    border-radius: 12px !important;
+    border: 1px solid #D1D5DB !important;
+    background: #FFFFFF !important;
+  }
+
+  .choices__list--multiple .choices__item {
+    background: #E60000 !important;
+    border-color: #E60000 !important;
+    color: #FFFFFF !important;
+    border-radius: 999px !important;
+    font-size: 0.70rem !important;
+    font-weight: 800 !important;
+  }
+
+  .choices__list--dropdown,
+  .choices__list[aria-expanded] {
+    z-index: 99999 !important;
+  }
+
+  .log-kpi-row {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(150px, 1fr));
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+
+  .log-kpi-card {
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 16px 17px;
+    box-shadow: 0 8px 24px rgba(15,23,42,0.07);
+    position: relative;
+    overflow: hidden;
+    border-left: 5px solid #E60000;
+  }
+
+  .log-kpi-card::after {
+    content: "";
+    position: absolute;
+    right: -35px;
+    top: -35px;
+    width: 95px;
+    height: 95px;
+    border-radius: 50%;
+    background: rgba(230,0,0,0.07);
+  }
+
+  .log-kpi-card .icon {
+    font-size: 1.35rem;
+    margin-bottom: 0.2rem;
+  }
+
+  .log-kpi-card .label {
+    font-size: 0.70rem;
+    color: #6B7280;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+
+  .log-kpi-card .value {
+    margin-top: 5px;
+    font-size: 1.62rem;
+    line-height: 1;
+    font-weight: 950;
+  }
+
+  .log-section-header {
+    margin: 22px 0 13px;
+    padding: 13px 18px;
+    border-radius: 18px;
+    background: linear-gradient(90deg, #E60000 0%, #C90000 48%, #8F1111 100%);
+    box-shadow: 0 12px 26px rgba(230,0,0,0.22);
+    color: #FFFFFF;
+    font-size: 0.92rem;
+    font-weight: 950;
+    letter-spacing: .045em;
+    text-transform: uppercase;
+  }
+
+  .log-chart-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(260px, 1fr));
+    gap: 22px;
+    margin-bottom: 18px;
+  }
+
+  .log-chart-card {
+    position: relative;
+    min-height: 500px;
+    padding: 20px 20px 16px;
+    border-radius: 24px;
+    border: 1px solid rgba(230, 0, 0, 0.12);
+    background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.96) 100%);
+    box-shadow: 0 18px 38px rgba(15, 23, 42, 0.10);
+    overflow: hidden;
+  }
+
+  .log-chart-card::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 7px;
+    background: linear-gradient(90deg, #E60000 0%, #B71C1C 55%, #7F1111 100%);
+    z-index: 2;
+  }
+
+  .log-chart-card::after {
+    content: "";
+    position: absolute;
+    right: -70px;
+    top: -70px;
+    width: 170px;
+    height: 170px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(230,0,0,0.13), rgba(230,0,0,0.00) 68%);
+    pointer-events: none;
+  }
+
+  .log-graph {
+    width: 100%;
+    height: 465px;
+    min-height: 465px;
+  }
+
+  #g3, #g4, #g6 {
+    height: 500px;
+    min-height: 500px;
+  }
+
+  #log-loading-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(255,255,255,0.70);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 99999;
+    backdrop-filter: blur(4px);
+  }
+
+  #log-loading-overlay.show {
+    display: flex;
+  }
+
+  .log-spinner-box {
+    background: white;
+    border-radius: 18px;
+    box-shadow: var(--shadow);
+    padding: 18px 22px;
+    color: #111827;
+    font-weight: 900;
+    border: 1px solid var(--line);
+  }
+
+  @media (max-width: 1100px) {
+    .log-filter-bar {
+      grid-template-columns: repeat(2, minmax(170px, 1fr));
+    }
+
+    .log-kpi-row,
+    .log-chart-row {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 700px) {
+    .log-filter-bar {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
+<div class="log-page">
+  <div class="dash-hero">
+    <div class="dash-title-wrap">
+      <div class="dash-icon">LOG</div>
+      <div>
+        <h1 class="dash-title">LOG & Reincidência</h1>
+        <p class="dash-subtitle">Análise executiva de contratos com LOG, reincidência e criticidade operacional.</p>
+      </div>
+    </div>
+    <a href="/area/adm/desconexao/" class="btn-voltar">← Voltar para Desconexão</a>
+  </div>
+
+  <div class="log-filter-bar">
+    <div class="filter-item"><label>SAFRA</label><select id="f-SAFRA" multiple></select></div>
+    <div class="filter-item"><label>TIPO DESCONEXÃO</label><select id="f-DS_TIPO_DESCONEXAO" multiple></select></div>
+    <div class="filter-item"><label>CIDADE</label><select id="f-NM_CIDADE" multiple></select></div>
+    <div class="filter-item"><label>PENDÊNCIA</label><select id="f-PENDENCIA" multiple></select></div>
+  </div>
+
+  <div class="log-kpi-row">
+    <div class="log-kpi-card" style="border-left-color:#9E9E9E">
+      <div class="icon" style="color:#9E9E9E">●</div>
+      <div class="label">Total</div>
+      <div class="value" id="kpi-total" style="color:#333">0</div>
+    </div>
+
+    <div class="log-kpi-card" style="border-left-color:#F57C00">
+      <div class="icon" style="color:#F57C00">▲</div>
+      <div class="label">Com LOG</div>
+      <div class="value" id="kpi-com-log" style="color:#F57C00">0</div>
+    </div>
+
+    <div class="log-kpi-card" style="border-left-color:#2E7D32">
+      <div class="icon" style="color:#2E7D32">●</div>
+      <div class="label">Sem LOG</div>
+      <div class="value" id="kpi-sem-log" style="color:#2E7D32">0</div>
+    </div>
+
+    <div class="log-kpi-card" style="border-left-color:#E60000">
+      <div class="icon" style="color:#E60000">◆</div>
+      <div class="label">Críticos 6+</div>
+      <div class="value" id="kpi-criticos" style="color:#E60000">0</div>
+    </div>
+
+    <div class="log-kpi-card" style="border-left-color:#1565C0">
+      <div class="icon" style="color:#1565C0">%</div>
+      <div class="label">% Com LOG</div>
+      <div class="value" id="kpi-pct-log" style="color:#1565C0">0%</div>
+    </div>
+  </div>
+
+  <div class="log-section-header">Distribuição do LOG</div>
+  <div class="log-chart-row">
+    <div class="log-chart-card"><div id="g1" class="log-graph"></div></div>
+    <div class="log-chart-card"><div id="g2" class="log-graph"></div></div>
+  </div>
+
+  <div class="log-section-header">Motivos e Responsáveis</div>
+  <div class="log-chart-row">
+    <div class="log-chart-card"><div id="g3" class="log-graph"></div></div>
+    <div class="log-chart-card"><div id="g4" class="log-graph"></div></div>
+  </div>
+
+  <div class="log-section-header">Análise por Tipo e Cidade</div>
+  <div class="log-chart-row">
+    <div class="log-chart-card"><div id="g5" class="log-graph"></div></div>
+    <div class="log-chart-card"><div id="g6" class="log-graph"></div></div>
+  </div>
+</div>
+
+<div id="log-loading-overlay">
+  <div class="log-spinner-box">Carregando LOG...</div>
+</div>
+
+<script>
+(function () {
+  const API_OPTIONS = "/dash/log/api/options";
+  const API_DATA = "/dash/log/api/data";
+  const FILTERS = ["SAFRA", "DS_TIPO_DESCONEXAO", "NM_CIDADE", "PENDENCIA"];
+
+  const choicesObj = {};
+  let updating = false;
+  let debounceTimer = null;
+  let controller = null;
+
+  const CORES_LOG = {
+    "SEM LOG": "#9E9E9E",
+    "1x": "#1565C0",
+    "2-3x": "#F9A825",
+    "4-5x": "#F57C00",
+    "6x+": "#E60000"
+  };
+
+  const CORES_STATUS = {
+    "COM LOG": "#F57C00",
+    "SEM LOG": "#2E7D32"
+  };
+
+  function showLoading(s) {
+    const el = document.getElementById("log-loading-overlay");
+    if (el) el.classList.toggle("show", s);
+  }
+
+  function fmtNum(n) {
+    if (n === undefined || n === null || n === "") return "0";
+    return Number(n).toLocaleString("pt-BR");
+  }
+
+  function compactLabel(txt, maxLen) {
+    txt = String(txt || "");
+    maxLen = maxLen || 34;
+    if (txt.length <= maxLen) return txt;
+    return txt.slice(0, maxLen - 1) + "…";
+  }
+
+  function selectedValues(f) {
+    const inst = choicesObj[f];
+    if (!inst) return [];
+    const val = inst.getValue(true);
+    if (!val) return [];
+    if (Array.isArray(val)) return val.map(String);
+    return [String(val)];
+  }
+
+  function getSelected() {
+    const sel = {};
+    FILTERS.forEach(function (f) {
+      sel[f] = selectedValues(f);
+    });
+    return sel;
+  }
+
+  function buildQuery(sel) {
+    const p = new URLSearchParams();
+    FILTERS.forEach(function (f) {
+      (sel[f] || []).forEach(function (v) {
+        p.append(f, v);
+      });
+    });
+    return p.toString();
+  }
+
+  async function readJsonOrThrow(response, label) {
+    const contentType = response.headers.get("content-type") || "";
+    const text = await response.text();
+
+    if (!response.ok) {
+      throw new Error("Endpoint " + label + " retornou HTTP " + response.status + ": " + text.slice(0, 220));
+    }
+
+    if (!contentType.includes("application/json")) {
+      throw new Error("Endpoint " + label + " não retornou JSON. Início da resposta: " + text.slice(0, 220));
+    }
+
+    return JSON.parse(text);
+  }
+
+  function baseLayout(title, height, kind) {
+    const isH = kind === "hbar";
+
+    return {
+      title: {
+        text: "<b>" + title + "</b>",
+        x: 0.01,
+        y: 0.97,
+        xanchor: "left",
+        font: {
+          size: 17,
+          color: "#111827",
+          family: "Inter, Segoe UI, Arial"
+        }
+      },
+      height: height || 465,
+      margin: isH ? { l: 190, r: 42, t: 72, b: 58 } : { l: 52, r: 42, t: 72, b: 68 },
+      paper_bgcolor: "rgba(255,255,255,0)",
+      plot_bgcolor: "rgba(255,255,255,0)",
+      font: {
+        family: "Inter, Segoe UI, Arial",
+        size: 11,
+        color: "#374151"
+      },
+      legend: {
+        orientation: "h",
+        y: -0.17,
+        x: 0.5,
+        xanchor: "center",
+        font: { size: 10 }
+      },
+      hoverlabel: {
+        bgcolor: "#111827",
+        bordercolor: "#111827",
+        font: {
+          color: "#FFFFFF",
+          family: "Inter, Segoe UI, Arial",
+          size: 12
+        }
+      },
+      bargap: 0.24
+    };
+  }
+
+  function emptyChart(id, msg) {
+    const layout = baseLayout(msg || "Sem dados", 465);
+    layout.annotations = [{
+      text: "<b>" + (msg || "Sem dados") + "</b>",
+      showarrow: false,
+      x: 0.5,
+      y: 0.5,
+      xref: "paper",
+      yref: "paper",
+      font: { size: 17, color: "#9CA3AF" }
+    }];
+    layout.xaxis = { visible: false };
+    layout.yaxis = { visible: false };
+    Plotly.react(id, [], layout, { displayModeBar: false, responsive: true });
+  }
+
+  function barVertical(id, payload, title, colorsMap) {
+    if (!payload || !payload.labels || payload.labels.length === 0) {
+      emptyChart(id, "Sem dados");
+      return;
+    }
+
+    const colors = payload.labels.map(function (x) {
+      return colorsMap && colorsMap[x] ? colorsMap[x] : "#E60000";
+    });
+
+    const trace = {
+      type: "bar",
+      x: payload.labels,
+      y: payload.values,
+      marker: { color: colors },
+      text: payload.values.map(function (v) { return fmtNum(v); }),
+      textposition: "outside",
+      cliponaxis: false,
+      hovertemplate: "<b>%{x}</b><br>Quantidade: %{y:,.0f}<extra></extra>"
+    };
+
+    const layout = baseLayout(title, 465);
+    layout.xaxis = { title: "", tickangle: 0, gridcolor: "#EEF2F7" };
+    layout.yaxis = { title: "Quantidade", gridcolor: "#EEF2F7", rangemode: "tozero" };
+
+    Plotly.react(id, [trace], layout, { displayModeBar: false, responsive: true });
+  }
+
+  function donut(id, payload, title, colorsMap) {
+    if (!payload || !payload.labels || payload.labels.length === 0) {
+      emptyChart(id, "Sem dados");
+      return;
+    }
+
+    const total = (payload.values || []).reduce(function (a, b) { return a + Number(b || 0); }, 0);
+    const colors = payload.labels.map(function (x) {
+      return colorsMap && colorsMap[x] ? colorsMap[x] : "#1565C0";
+    });
+
+    const trace = {
+      type: "pie",
+      labels: payload.labels,
+      values: payload.values,
+      hole: 0.60,
+      sort: false,
+      textinfo: "label+percent",
+      textposition: "inside",
+      insidetextfont: { color: "#FFFFFF", size: 13 },
+      marker: { colors: colors, line: { color: "#FFFFFF", width: 4 } },
+      hovertemplate: "<b>%{label}</b><br>Quantidade: %{value:,.0f}<br>Participação: %{percent}<extra></extra>"
+    };
+
+    const layout = baseLayout(title, 465);
+    layout.margin = { l: 34, r: 34, t: 72, b: 72 };
+    layout.annotations = [{
+      text: "<b>" + total.toLocaleString("pt-BR") + "</b><br><span style='font-size:11px;color:#6B7280'>Total</span>",
+      showarrow: false,
+      x: 0.5,
+      y: 0.5,
+      font: { size: 17, color: "#111827" }
+    }];
+
+    Plotly.react(id, [trace], layout, { displayModeBar: false, responsive: true });
+  }
+
+  function hbar(id, payload, title, color) {
+    if (!payload || !payload.labels || payload.labels.length === 0) {
+      emptyChart(id, "Sem dados");
+      return;
+    }
+
+    const labelsFull = payload.labels || [];
+    const labelsShort = labelsFull.map(function (x) { return compactLabel(x, id === "g6" ? 34 : 28); });
+
+    const trace = {
+      type: "bar",
+      orientation: "h",
+      y: labelsShort,
+      x: payload.values,
+      customdata: labelsFull,
+      marker: { color: color || "#E60000" },
+      text: payload.values.map(function (v) { return v > 0 ? fmtNum(v) : ""; }),
+      textposition: "inside",
+      insidetextanchor: "middle",
+      textfont: { color: "#FFFFFF", size: 11 },
+      hovertemplate: "<b>%{customdata}</b><br>Quantidade: %{x:,.0f}<extra></extra>"
+    };
+
+    const layout = baseLayout(title, id === "g6" ? 500 : 500, "hbar");
+    layout.margin = id === "g6" ? { l: 230, r: 42, t: 72, b: 58 } : { l: 200, r: 42, t: 72, b: 58 };
+    layout.xaxis = { title: "", gridcolor: "#EEF2F7", zeroline: false };
+    layout.yaxis = { title: "", automargin: true };
+
+    Plotly.react(id, [trace], layout, { displayModeBar: false, responsive: true });
+  }
+
+  function stackedTipo(id, payload, title) {
+    if (!payload || !payload.labels || payload.labels.length === 0) {
+      emptyChart(id, "Sem dados");
+      return;
+    }
+
+    const statuses = ["COM LOG", "SEM LOG"];
+
+    const traces = statuses.map(function (status) {
+      const x = payload.series && payload.series[status] ? payload.series[status] : [];
+
+      return {
+        type: "bar",
+        orientation: "h",
+        name: status,
+        y: payload.labels,
+        x: x,
+        marker: { color: CORES_STATUS[status] },
+        text: x.map(function (v) { return v > 0 ? fmtNum(v) : ""; }),
+        textposition: "inside",
+        insidetextanchor: "middle",
+        textfont: { color: "#FFFFFF", size: 11 },
+        hovertemplate: "<b>%{y}</b><br>" + status + ": %{x:,.0f}<extra></extra>"
+      };
+    });
+
+    const layout = baseLayout(title, 465, "hbar");
+    layout.barmode = "stack";
+    layout.margin = { l: 190, r: 42, t: 72, b: 58 };
+    layout.xaxis = { title: "", gridcolor: "#EEF2F7", zeroline: false };
+    layout.yaxis = { title: "", automargin: true };
+
+    Plotly.react(id, traces, layout, { displayModeBar: false, responsive: true });
+  }
+
+  function updateKpis(kpis) {
+    kpis = kpis || {};
+    document.getElementById("kpi-total").textContent = fmtNum(kpis.total);
+    document.getElementById("kpi-com-log").textContent = fmtNum(kpis.com_log);
+    document.getElementById("kpi-sem-log").textContent = fmtNum(kpis.sem_log);
+    document.getElementById("kpi-criticos").textContent = fmtNum(kpis.criticos);
+    document.getElementById("kpi-pct-log").textContent = (kpis.pct_log || 0) + "%";
+  }
+
+  function renderCharts(charts) {
+    charts = charts || {};
+
+    barVertical("g1", charts.g1_faixa_log, "Distribuição por Faixa LOG", CORES_LOG);
+    donut("g2", charts.g2_com_sem_log, "Com LOG x Sem LOG", CORES_STATUS);
+
+    const g3Empty = charts.g3_motivos && charts.g3_motivos.is_fallback_empty;
+    const g4Empty = charts.g4_responsaveis && charts.g4_responsaveis.is_fallback_empty;
+
+    hbar(
+      "g3",
+      charts.g3_motivos,
+      (charts.g3_motivos && charts.g3_motivos.title) ? charts.g3_motivos.title : "Motivos de Reagenda",
+      g3Empty ? "#9E9E9E" : "#F57C00"
+    );
+
+    hbar(
+      "g4",
+      charts.g4_responsaveis,
+      (charts.g4_responsaveis && charts.g4_responsaveis.title) ? charts.g4_responsaveis.title : "Responsáveis pela Quebra",
+      g4Empty ? "#9E9E9E" : "#E60000"
+    );
+
+    stackedTipo("g5", charts.g5_tipo_log, "LOG por Tipo de Desconexão");
+    hbar("g6", charts.g6_cidades_log, "Cidades com Maior Volume de LOG", "#E60000");
+
+    setTimeout(resizeCharts, 120);
+  }
+
+  function resizeCharts() {
+    ["g1", "g2", "g3", "g4", "g5", "g6"].forEach(function (id) {
+      const el = document.getElementById(id);
+      if (el && typeof Plotly !== "undefined") {
+        Plotly.Plots.resize(el);
+      }
+    });
+  }
+
+  async function refreshOptions() {
+    const sel = getSelected();
+    const qs = buildQuery(sel);
+    const url = qs ? (API_OPTIONS + "?" + qs) : API_OPTIONS;
+
+    const r = await fetch(url, { headers: { "Accept": "application/json" } });
+    const opts = await readJsonOrThrow(r, "options");
+
+    updating = true;
+
+    FILTERS.forEach(function (f) {
+      const current = sel[f] || [];
+      const inst = choicesObj[f];
+      if (!inst) return;
+
+      inst.clearStore();
+
+      const items = (opts[f] || []).map(function (v) {
+        return {
+          value: String(v),
+          label: String(v)
+        };
+      });
+
+      inst.setChoices(items, "value", "label", true);
+
+      const available = new Set(items.map(function (x) { return String(x.value); }));
+      const keep = current.filter(function (v) { return available.has(String(v)); });
+
+      if (keep.length > 0) {
+        inst.setChoiceByValue(keep);
+      }
+    });
+
+    updating = false;
+  }
+
+  async function refreshData() {
+    if (controller) controller.abort();
+    controller = new AbortController();
+
+    const sel = getSelected();
+    const qs = buildQuery(sel);
+    const url = qs ? (API_DATA + "?" + qs) : API_DATA;
+
+    showLoading(true);
+
+    try {
+      const r = await fetch(url, {
+        signal: controller.signal,
+        headers: { "Accept": "application/json" }
+      });
+
+      const d = await readJsonOrThrow(r, "data");
+
+      if (!d || d.ok === false) {
+        throw new Error("API retornou payload inválido.");
+      }
+
+      updateKpis(d.kpis || {});
+      renderCharts(d.charts || {});
+
+    } catch (e) {
+      if (e.name !== "AbortError") {
+        console.error("[dash_log] erro:", e);
+        alert("Erro no Dash Log: " + e.message);
+      }
+    } finally {
+      showLoading(false);
+    }
+  }
+
+  function onFilterChange() {
+    if (updating) return;
+
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(async function () {
+      await refreshOptions();
+      await refreshData();
+    }, 250);
+  }
+
+  function init() {
+    if (typeof Choices === "undefined" || typeof Plotly === "undefined") {
+      console.warn("[dash_log] CDN ainda não carregou, tentando de novo...");
+      setTimeout(init, 200);
+      return;
+    }
+
+    FILTERS.forEach(function (f) {
+      const el = document.getElementById("f-" + f);
+      choicesObj[f] = new Choices(el, {
+        removeItemButton: true,
+        placeholder: true,
+        placeholderValue: "Todos...",
+        searchEnabled: true,
+        shouldSort: false,
+        itemSelectText: "",
+        noResultsText: "Nenhum resultado",
+        noChoicesText: "Sem opções",
+        searchPlaceholderValue: "Pesquisar..."
+      });
+
+      el.addEventListener("addItem", onFilterChange);
+      el.addEventListener("removeItem", onFilterChange);
+      el.addEventListener("change", onFilterChange);
+    });
+
+    (async function () {
+      await refreshOptions();
+      await refreshData();
+    })();
+  }
+
+  window.addEventListener("resize", resizeCharts);
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
+})();
+</script>
+{% endblock %}

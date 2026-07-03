@@ -1,0 +1,290 @@
+{% extends "base.html" %}
+{% block title %}Quebra de Agenda{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css">
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+<style>
+:root{
+  --red:#E60000; --redD:#B71C1C;
+  --green:#2E7D32; --yellow:#F9A825; --blue:#1976D2;
+  --white:#FFFFFF; --bg:#F8F9FA; --border:#E9ECEF;
+  --muted:#6C757D; --dark:#343A40; --gray:#ADB5BD;
+}
+.qbr-wrap{padding:0 1rem;background:var(--bg);min-height:100vh;}
+.qbr-header{background:var(--white);color:var(--dark);
+  padding:1.2rem 1.5rem;border-radius:.6rem;margin:1rem 0;
+  box-shadow:0 1px 3px rgba(0,0,0,.06);border-left:5px solid var(--red);
+  display:flex;align-items:center;justify-content:space-between;}
+.qbr-header h2{margin:0;font-size:1.35rem;font-weight:600;color:var(--dark);}
+.qbr-header h2 .icon{color:var(--red);margin-right:.4rem;}
+.qbr-header .sub{color:var(--muted);font-size:.85rem;margin-top:.2rem;}
+.qbr-back{color:var(--red);text-decoration:none;font-size:.85rem;
+  border:1px solid var(--red);padding:.4rem 1rem;border-radius:.3rem;
+  font-weight:600;transition:.2s;}
+.qbr-back:hover{background:var(--red);color:#fff;}
+.qbr-section{color:var(--dark);padding:.6rem 1rem;border-radius:.3rem;
+  margin:1.5rem 0 .8rem;font-weight:600;font-size:.9rem;
+  background:var(--white);border-left:4px solid var(--red);
+  text-transform:uppercase;letter-spacing:.05em;
+  box-shadow:0 1px 2px rgba(0,0,0,.04);}
+.qbr-section .icon{color:var(--red);margin-right:.4rem;}
+.qbr-filters{background:var(--white);border-radius:.6rem;padding:1.2rem;
+  margin-bottom:1rem;box-shadow:0 1px 3px rgba(0,0,0,.06);}
+.qbr-filters-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:.8rem;}
+.qbr-filters label{font-size:.7rem;font-weight:700;color:var(--muted);
+  text-transform:uppercase;margin-bottom:.3rem;display:block;letter-spacing:.05em;}
+@media (max-width:1100px){.qbr-filters-grid{grid-template-columns:repeat(3,1fr);}}
+@media (max-width:700px){.qbr-filters-grid{grid-template-columns:repeat(2,1fr);}}
+.qbr-actions-row{display:flex;justify-content:space-between;
+  align-items:center;margin-top:.8rem;flex-wrap:wrap;gap:.8rem;}
+.qbr-clear-btn{border:1px solid var(--red);color:var(--red);background:#fff;
+  padding:.4rem 1rem;border-radius:.3rem;font-size:.78rem;cursor:pointer;
+  font-weight:600;transition:.2s;}
+.qbr-clear-btn:hover{background:var(--red);color:#fff;}
+.qbr-toggle-wrap{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;}
+.qbr-toggle-lbl{font-size:.75rem;color:var(--muted);font-weight:700;
+  text-transform:uppercase;letter-spacing:.05em;}
+.qbr-toggle{display:inline-flex;background:var(--bg);border-radius:30px;
+  padding:3px;border:1px solid var(--border);}
+.qbr-toggle button{background:transparent;border:0;color:var(--muted);
+  padding:.4rem 1rem;border-radius:30px;font-size:.78rem;font-weight:700;
+  cursor:pointer;transition:.2s;letter-spacing:.03em;}
+.qbr-toggle button.active{background:var(--red);color:#fff;
+  box-shadow:0 1px 3px rgba(230,0,0,.3);}
+.qbr-toggle button:hover:not(.active){color:var(--dark);}
+.qbr-toggle-help{font-size:.7rem;color:var(--muted);margin-top:.3rem;
+  width:100%;font-style:italic;}
+.qbr-kpis-grid{display:grid;grid-template-columns:repeat(4,1fr);
+  gap:1rem;margin-bottom:.5rem;}
+@media (max-width:900px){.qbr-kpis-grid{grid-template-columns:repeat(2,1fr);}}
+.qbr-kpi{background:var(--white);border-radius:.6rem;padding:1.1rem 1.2rem;
+  box-shadow:0 1px 3px rgba(0,0,0,.06);position:relative;
+  border-top:3px solid var(--red);transition:.2s;}
+.qbr-kpi:hover{transform:translateY(-2px);box-shadow:0 4px 10px rgba(0,0,0,.08);}
+.qbr-kpi.b-blue{border-top-color:var(--blue);}
+.qbr-kpi.b-red{border-top-color:var(--red);}
+.qbr-kpi.b-green{border-top-color:var(--green);}
+.qbr-kpi.b-orange{border-top-color:var(--yellow);}
+.qbr-kpi .ico{position:absolute;top:1rem;right:1.2rem;font-size:1.3rem;opacity:.25;}
+.qbr-kpi.b-blue .ico{color:var(--blue);}
+.qbr-kpi.b-red .ico{color:var(--red);}
+.qbr-kpi.b-green .ico{color:var(--green);}
+.qbr-kpi.b-orange .ico{color:var(--yellow);}
+.qbr-kpi .lbl{font-size:.7rem;color:var(--muted);text-transform:uppercase;
+  font-weight:700;margin-bottom:.5rem;letter-spacing:.05em;}
+.qbr-kpi .val{font-size:1.85rem;font-weight:700;color:var(--dark);line-height:1;}
+.qbr-graphs-row{display:grid;grid-template-columns:1fr 1fr;
+  gap:1rem;margin-bottom:.5rem;}
+@media (max-width:992px){.qbr-graphs-row{grid-template-columns:1fr;}}
+.qbr-graph-card{background:var(--white);border-radius:.6rem;padding:.4rem;
+  box-shadow:0 1px 3px rgba(0,0,0,.06);transition:.2s;}
+.qbr-graph-card:hover{box-shadow:0 3px 10px rgba(0,0,0,.08);}
+.qbr-graph-card .gbox{height:420px;}
+.choices__inner{min-height:40px;padding:5px 8px;font-size:.85rem;
+  border:1px solid var(--border);border-radius:.3rem;background:#fff;}
+.choices__inner:focus-within{border-color:var(--red);}
+.choices__list--multiple .choices__item{background:var(--red);
+  border-color:var(--red);font-size:.75rem;border-radius:3px;}
+#qbr-loader{position:fixed;top:1rem;right:1rem;background:var(--red);
+  color:#fff;padding:.5rem 1rem;border-radius:.3rem;font-size:.85rem;
+  z-index:9999;display:none;box-shadow:0 2px 8px rgba(0,0,0,.2);font-weight:600;}
+#qbr-warmup{position:fixed;top:0;left:0;width:100%;height:100%;
+  background:rgba(255,255,255,.96);display:flex;align-items:center;
+  justify-content:center;z-index:10000;}
+#qbr-warmup .box{background:#fff;padding:2rem 3rem;border-radius:.5rem;
+  box-shadow:0 4px 20px rgba(0,0,0,.15);text-align:center;
+  border-top:5px solid var(--red);}
+#qbr-warmup h3{color:var(--red);margin:0 0 .5rem;}
+#qbr-warmup .spin{margin:1rem auto;width:40px;height:40px;
+  border:4px solid #eee;border-top-color:var(--red);border-radius:50%;
+  animation:spin 1s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+</style>
+
+<div id="qbr-warmup">
+  <div class="box">
+    <h3>⏳ Carregando dados...</h3>
+    <div>1a vez aquece o cache. Proximos acessos serao instantaneos.</div>
+    <div class="spin"></div>
+    <div id="qbr-warmup-msg" style="font-size:.85rem;color:#666;">Aguarde...</div>
+  </div>
+</div>
+<div id="qbr-loader">⏳ Atualizando...</div>
+
+<div class="qbr-wrap">
+  <div class="qbr-header">
+    <div>
+      <h2><span class="icon">📅</span>Desconexao RNO — Quebra de Agenda</h2>
+      <div class="sub">Analise das ordens agendadas e quebras por parceira</div>
+    </div>
+    <a class="qbr-back" href="/area/adm/desconexao/">← Menu</a>
+  </div>
+
+  <div class="qbr-filters">
+    <div class="qbr-filters-grid">
+      <div><label>Ano</label><select id="f-anos" multiple></select></div>
+      <div><label>Mes</label><select id="f-meses" multiple></select></div>
+      <div><label>Dia</label><select id="f-dias" multiple></select></div>
+      <div><label>UF</label><select id="f-ufs" multiple></select></div>
+      <div><label>Cidade</label><select id="f-cids" multiple></select></div>
+      <div><label>Parceira</label><select id="f-parcs" multiple></select></div>
+    </div>
+    <div class="qbr-actions-row">
+      <div class="qbr-toggle-wrap">
+        <span class="qbr-toggle-lbl">Visualizar:</span>
+        <div class="qbr-toggle">
+          <button type="button" id="btnQtd"  class="active">📊 Quantidade</button>
+          <button type="button" id="btnTaxa">📈 Taxa</button>
+          <button type="button" id="btnRep">🎯 Representatividade</button>
+        </div>
+        <div class="qbr-toggle-help" id="modeHelp"></div>
+      </div>
+      <button class="qbr-clear-btn" id="btnClear">🗑️ Limpar filtros</button>
+    </div>
+  </div>
+
+  <div class="qbr-kpis-grid">
+    <div class="qbr-kpi b-blue"><div class="ico">📊</div><div class="lbl">Total Registros</div><div class="val" id="kpi-total">-</div></div>
+    <div class="qbr-kpi b-red"><div class="ico">⚠️</div><div class="lbl">Com Quebra</div><div class="val" id="kpi-comq">-</div></div>
+    <div class="qbr-kpi b-green"><div class="ico">✅</div><div class="lbl">Sem Quebra</div><div class="val" id="kpi-semq">-</div></div>
+    <div class="qbr-kpi b-orange"><div class="ico">📉</div><div class="lbl">% Quebra</div><div class="val" id="kpi-pct">-</div></div>
+  </div>
+
+  <div class="qbr-section"><span class="icon">📈</span>Evolucao Temporal</div>
+  <div class="qbr-graphs-row">
+    <div class="qbr-graph-card"><div id="g1" class="gbox"></div></div>
+    <div class="qbr-graph-card"><div id="g2" class="gbox"></div></div>
+  </div>
+  <div class="qbr-section"><span class="icon">🌎</span>Cidades e Motivos</div>
+  <div class="qbr-graphs-row">
+    <div class="qbr-graph-card"><div id="g3" class="gbox"></div></div>
+    <div class="qbr-graph-card"><div id="g4" class="gbox"></div></div>
+  </div>
+  <div class="qbr-section"><span class="icon">🏢</span>Parceiras e Responsaveis</div>
+  <div class="qbr-graphs-row" style="margin-bottom:2rem;">
+    <div class="qbr-graph-card"><div id="g5" class="gbox"></div></div>
+    <div class="qbr-graph-card"><div id="g6" class="gbox"></div></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const F={anos:null,meses:null,dias:null,ufs:null,cids:null,parcs:null};
+  const _up={}; let inflight=null;
+  let MODE = localStorage.getItem("qbr_mode") || "qtd";
+  if(["qtd","taxa","rep"].indexOf(MODE)<0) MODE="qtd";
+
+  const HELP = {
+    qtd:  "Numero absoluto de quebras por categoria.",
+    taxa: "Taxa de quebra de cada categoria (quebras / total da categoria).",
+    rep:  "Contribuicao para a taxa total: quebras da categoria / total geral. Soma = taxa total de quebra.",
+  };
+
+  function loader(on){document.getElementById("qbr-loader").style.display=on?"block":"none";}
+  function hideWarmup(){document.getElementById("qbr-warmup").style.display="none";}
+  function setWarmupMsg(s){document.getElementById("qbr-warmup-msg").innerText=s;}
+
+  function updateToggleUI(){
+    document.getElementById("btnQtd").classList.toggle("active", MODE==="qtd");
+    document.getElementById("btnTaxa").classList.toggle("active", MODE==="taxa");
+    document.getElementById("btnRep").classList.toggle("active", MODE==="rep");
+    document.getElementById("modeHelp").innerText = HELP[MODE] || "";
+  }
+
+  function mk(id,key){
+    const el=document.getElementById(id);
+    const c=new Choices(el,{removeItemButton:true,shouldSort:false,
+      placeholderValue:"Todos...",searchPlaceholderValue:"Buscar...",
+      noResultsText:"Nenhum",noChoicesText:"Sem opcoes",itemSelectText:""});
+    el.addEventListener("addItem",function(){if(!_up[key])refresh();});
+    el.addEventListener("removeItem",function(){if(!_up[key])refresh();});
+    return c;
+  }
+  function setO(c,key,opts){
+    const sel=c.getValue(true)||[];
+    _up[key]=true; c.clearStore();
+    const ch=(opts||[]).map(function(o){return {value:o.v,label:o.l,selected:sel.indexOf(o.v)>=0};});
+    c.setChoices(ch,"value","label",true);
+    _up[key]=false;
+  }
+  function vals(c){return c.getValue(true)||[];}
+  async function waitWarm(){
+    let tries=0;
+    while(tries<120){
+      try{
+        const r=await fetch("/dash/quebra/api/status");
+        const j=await r.json();
+        if(j.ready){hideWarmup();return true;}
+        setWarmupMsg("Carregando... ("+tries+"s)");
+      }catch(e){}
+      await new Promise(r=>setTimeout(r,1000));
+      tries++;
+    }
+    return false;
+  }
+  async function refresh(){
+    if(inflight)inflight.abort();
+    inflight=new AbortController(); loader(true);
+    const body={anos:vals(F.anos),meses:vals(F.meses),dias:vals(F.dias),
+      ufs:vals(F.ufs),cids:vals(F.cids),parcs:vals(F.parcs),mode:MODE};
+    try{
+      const r=await fetch("/dash/quebra/api/refresh",{method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify(body),signal:inflight.signal});
+      if(r.status===202){loader(false);await waitWarm();return refresh();}
+      const j=await r.json();
+      if(!j.ok){console.error(j);loader(false);return;}
+      setO(F.anos,"anos",j.options.anos);
+      setO(F.meses,"meses",j.options.meses);
+      setO(F.dias,"dias",j.options.dias);
+      setO(F.ufs,"ufs",j.options.ufs);
+      setO(F.cids,"cids",j.options.cids);
+      setO(F.parcs,"parcs",j.options.parcs);
+      document.getElementById("kpi-total").innerText=j.kpis.total;
+      document.getElementById("kpi-comq").innerText=j.kpis.com_q;
+      document.getElementById("kpi-semq").innerText=j.kpis.sem_q;
+      document.getElementById("kpi-pct").innerText=j.kpis.pct;
+      const cfg={displayModeBar:false,responsive:true};
+      ["g1","g2","g3","g4","g5","g6"].forEach(function(k){
+        Plotly.react(k,j.figs[k].data,j.figs[k].layout,cfg);
+      });
+      console.log("refresh em "+j.elapsed_s+"s (mode="+MODE+")");
+    }catch(e){if(e.name!=="AbortError")console.error(e);}
+    finally{loader(false);}
+  }
+
+  function setMode(m){
+    if(MODE===m)return;
+    MODE=m; localStorage.setItem("qbr_mode",MODE);
+    updateToggleUI(); refresh();
+  }
+
+  document.addEventListener("DOMContentLoaded",async function(){
+    F.anos=mk("f-anos","anos"); F.meses=mk("f-meses","meses");
+    F.dias=mk("f-dias","dias"); F.ufs=mk("f-ufs","ufs");
+    F.cids=mk("f-cids","cids"); F.parcs=mk("f-parcs","parcs");
+    document.getElementById("btnClear").addEventListener("click",function(){
+      ["anos","meses","dias","ufs","cids","parcs"].forEach(function(k){
+        _up[k]=true; F[k].removeActiveItems(); _up[k]=false;
+      });
+      refresh();
+    });
+    document.getElementById("btnQtd").addEventListener("click",function(){setMode("qtd");});
+    document.getElementById("btnTaxa").addEventListener("click",function(){setMode("taxa");});
+    document.getElementById("btnRep").addEventListener("click",function(){setMode("rep");});
+    document.addEventListener("keydown",function(e){
+      if(e.target.tagName==="INPUT" || e.target.tagName==="SELECT")return;
+      if(e.key==="q"||e.key==="Q")setMode("qtd");
+      else if(e.key==="t"||e.key==="T")setMode("taxa");
+      else if(e.key==="r"||e.key==="R")setMode("rep");
+    });
+    updateToggleUI();
+    const r=await fetch("/dash/quebra/api/status");
+    const j=await r.json();
+    if(j.ready){hideWarmup();refresh();}
+    else{const ok=await waitWarm();if(ok)refresh();}
+  });
+})();
+</script>
+{% endblock %}

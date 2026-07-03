@@ -1,0 +1,61 @@
+# -*- coding: utf-8 -*-
+"""
+fix_titulo_desconexao.py
+- Altera titulo e subtitulo do cabecalho do hub Desconexao
+"""
+import os, shutil
+from datetime import datetime
+
+BASE = r"C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO"
+PATH = os.path.join(BASE, "templates", "hub_desconexao.html")
+
+print("=" * 64)
+print("  FIX_TITULO_DESCONEXAO")
+print("  " + datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
+print("=" * 64)
+print()
+
+if not os.path.exists(PATH):
+    print(f"  X Nao encontrado: {PATH}")
+    input("ENTER...")
+    raise SystemExit
+
+shutil.copy2(PATH, PATH + ".backup_titulo")
+print(f"  OK Backup .backup_titulo")
+
+with open(PATH, "r", encoding="utf-8") as f:
+    html = f.read()
+
+# 1) Titulo: "Setor Desconexao" -> "Desconexao"
+old_h2 = "<h2>Setor Desconexão</h2>"
+new_h2 = "<h2>Desconexão</h2>"
+if old_h2 in html:
+    html = html.replace(old_h2, new_h2)
+    print("  OK Titulo: 'Setor Desconexao' -> 'Desconexao'")
+else:
+    print("  !! H2 nao encontrado no formato esperado")
+
+# 2) Subtitulo
+old_p = "<p>Gestão e indicadores do processo de desconexão · Regional Norte</p>"
+new_p = "<p>Indicadores da Área de Desconexão · Regional Norte</p>"
+if old_p in html:
+    html = html.replace(old_p, new_p)
+    print("  OK Subtitulo atualizado")
+else:
+    print("  !! Paragrafo nao encontrado no formato esperado")
+
+with open(PATH, "w", encoding="utf-8", newline="\n") as f:
+    f.write(html)
+
+print()
+print("=" * 64)
+print("  ✅ TITULO ATUALIZADO")
+print("=" * 64)
+print()
+print("PROXIMOS PASSOS:")
+print("  1. NAO precisa reiniciar Flask")
+print("  2. CTRL+F5 no navegador")
+print("  3. URL: http://localhost:5000/areas/adm/desconexao/")
+print("  4. Validar cabecalho com novo texto")
+print()
+input("ENTER para fechar...")

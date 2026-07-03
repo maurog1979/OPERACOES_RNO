@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Setor Desconexão{% endblock %}
+
+{% block content %}
+<main class="main">
+  <a href="{{ url_for('area_view', area_slug='adm') }}" class="breadcrumb-link">
+    <div class="breadcrumb">
+      <i class="fa-solid fa-house"></i> Home
+      <i class="fa-solid fa-chevron-right"></i> ADM
+      <i class="fa-solid fa-chevron-right"></i>
+      <strong style="color:var(--text-primary);">Desconexão</strong>
+    </div>
+  </a>
+
+  <div class="area-header">
+    <div class="area-icon"><i class="fa-solid fa-plug-circle-xmark"></i></div>
+    <div class="area-info">
+      <h2>Desconexão</h2>
+      <p>Indicadores da Área de Desconexão · Regional Norte</p>
+    </div>
+  </div>
+
+  <h2 class="section-title">Dashboards</h2>
+  <div class="cards-grid">
+
+    <a href="/dash/executivo/" class="card-link">
+      <div class="card">
+        <div class="card-icon red"><i class="fa-solid fa-trophy"></i></div>
+        <h3 class="card-title">Visão Executiva</h3>
+        <p class="card-desc">Indicadores estratégicos C-level (4 KPIs + 6 gráficos)</p>
+        <div class="card-meta"><span>Ativo</span><i class="fa-solid fa-arrow-right"></i></div>
+      </div>
+    </a>
+
+    <div class="card-link">
+      <div class="card disabled">
+        <div class="card-icon blue"><i class="fa-solid fa-list-check"></i></div>
+        <h3 class="card-title">Backlog</h3>
+        <p class="card-desc">Backlog OS por cidade, aging e parceiro</p>
+        <div class="card-meta"><span></span><span class="badge-soon">Ativo</span></div>
+      </div>
+    </div>
+
+    <div class="card-link">
+      <div class="card disabled">
+        <div class="card-icon orange"><i class="fa-solid fa-calendar-xmark"></i></div>
+        <h3 class="card-title">Quebra de Agenda</h3>
+        <p class="card-desc">Análise de quebras de agenda</p>
+        <div class="card-meta"><span></span><span class="badge-soon">Ativo</span></div>
+      </div>
+    </div>
+
+    <a href="/dash/log/" class="card-link">
+      <div class="card">
+        <div class="card-icon purple"><i class="fa-solid fa-rotate-right"></i></div>
+        <h3 class="card-title">LOG &amp; Reincidência</h3>
+        <p class="card-desc">Histórico de LOG e reincidências</p>
+        <div class="card-meta"><span>Ativo</span><i class="fa-solid fa-arrow-right"></i></div>
+      </div>
+    </a>
+
+    <div class="card-link">
+      <div class="card disabled">
+        <div class="card-icon green"><i class="fa-solid fa-truck-ramp-box"></i></div>
+        <h3 class="card-title">Retirada de Equipamentos</h3>
+        <p class="card-desc">Performance TOA · retirada de equipamentos</p>
+        <div class="card-meta"><span></span><span class="badge-soon">Em Breve</span></div>
+      </div>
+    </div>
+
+    <a href="/dash/parceiras/" class="card-link">
+      <div class="card">
+        <div class="card-icon pink"><i class="fa-solid fa-handshake"></i></div>
+        <h3 class="card-title">Parceiras</h3>
+        <p class="card-desc">Performance por parceira</p>
+        <div class="card-meta"><span>Ativo</span><i class="fa-solid fa-arrow-right"></i></div>
+      </div>
+    </a>
+
+  </div>
+</main>
+{% endblock %}

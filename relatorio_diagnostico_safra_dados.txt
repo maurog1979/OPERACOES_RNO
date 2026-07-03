@@ -1,0 +1,14 @@
+RELATÓRIO — DIAGNÓSTICO DE DADOS DO PAINEL SAFRA
+Data/hora: 2026-06-26 11:17:34
+Raiz detectada: C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO
+dash_safra.py: C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO\areas\adm\desconexao\dash_safra.py | existe=True
+
+Conexão via data.db.get_connection: falhou — AttributeError: module 'data.db' has no attribute 'get_connection'
+Conexão via data.db.get_db_connection: falhou — AttributeError: module 'data.db' has no attribute 'get_db_connection'
+Conexão via data.db.conectar: falhou — AttributeError: module 'data.db' has no attribute 'conectar'
+Conexão via data.db.connection: falhou — AttributeError: module 'data.db' has no attribute 'connection'
+Conexão via data.db.get_conn: falhou — AttributeError: module 'data.db' has no attribute 'get_conn'
+Falha ao listar bancos MySQL locais: ModuleNotFoundError: No module named 'mysql'
+
+CONEXÃO SELECIONADA: origem=None | banco=None
+ERRO FINAL: nenhuma conexão com as tabelas Safra foi encontrada.

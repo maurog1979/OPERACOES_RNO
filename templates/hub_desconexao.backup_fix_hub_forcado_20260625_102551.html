@@ -1,0 +1,398 @@
+﻿{% extends "base.html" %}
+{% block title %}Setor Desconexão
+<style>
+  .hub-card-arrow{
+    color:#E60000;
+    font-size:1.4rem;
+    font-weight:700;
+    line-height:1;
+  }
+  .card-active{
+    opacity:1 !important;
+    pointer-events:auto !important;
+    filter:none !important;
+  }
+  .card-active *{
+    opacity:1 !important;
+  }
+</style>
+
+<style>
+/* === HUB RETIRADA ATIVA V3 GLOBAL === */
+.hub-retirada-ativo-v3 {
+    cursor: pointer !important;
+    pointer-events: auto !important;
+    opacity: 1 !important;
+    filter: none !important;
+}
+
+.hub-retirada-ativo-v3 * {
+    pointer-events: auto !important;
+}
+
+.hub-retirada-ativo-v3 .em-breve,
+.hub-retirada-ativo-v3 .coming-soon,
+.hub-retirada-ativo-v3 .soon,
+.hub-retirada-ativo-v3 .disabled,
+.hub-retirada-ativo-v3 .inativo {
+    opacity: 1 !important;
+    filter: none !important;
+}
+
+.hub-retirada-badge-v3 {
+    background: linear-gradient(135deg, #E60000, #B71C1C) !important;
+    color: #FFFFFF !important;
+    border-radius: 999px !important;
+    font-weight: 900 !important;
+    opacity: 1 !important;
+}
+/* === FIM HUB RETIRADA ATIVA V3 GLOBAL === */
+</style>
+
+<script>
+/* === HUB RETIRADA ATIVA V3 GLOBAL === */
+(function () {
+    const ROTA_RETIRADA = "/dash/retirada/";
+
+    function norm(txt) {
+        return String(txt || "")
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "");
+    }
+
+    function textoContemRetirada(el) {
+        return norm(el && el.textContent).includes("retirada de equipamentos");
+    }
+
+    function trocarTextosNoElemento(root) {
+        if (!root) {
+            return;
+        }
+
+        const walker = document.createTreeWalker(
+            root,
+            NodeFilter.SHOW_TEXT,
+            null
+        );
+
+        const nodes = [];
+
+        while (walker.nextNode()) {
+            nodes.push(walker.currentNode);
+        }
+
+        nodes.forEach(function (node) {
+            let t = node.nodeValue || "";
+            const original = t;
+
+            t = t.replace(/EM BREVE/g, "ACESSAR");
+            t = t.replace(/Em breve/g, "ACESSAR");
+            t = t.replace(/em breve/g, "ACESSAR");
+
+            t = t.replace(/Em desenvolvimento/g, "Disponível");
+            t = t.replace(/EM DESENVOLVIMENTO/g, "Disponível");
+            t = t.replace(/em desenvolvimento/g, "Disponível");
+
+            if (t !== original) {
+                node.nodeValue = t;
+            }
+        });
+    }
+
+    function removerBloqueios(el) {
+        if (!el) {
+            return;
+        }
+
+        const classes = [
+            "disabled",
+            "is-disabled",
+            "card-disabled",
+            "card-inativo",
+            "inativo",
+            "soon",
+            "coming-soon",
+            "em-breve",
+            "bloqueado"
+        ];
+
+        classes.forEach(function (c) {
+            el.classList.remove(c);
+        });
+
+        el.removeAttribute("disabled");
+        el.removeAttribute("aria-disabled");
+
+        if (el.getAttribute("tabindex") === "-1") {
+            el.removeAttribute("tabindex");
+        }
+
+        el.style.pointerEvents = "auto";
+        el.style.cursor = "pointer";
+        el.style.opacity = "1";
+        el.style.filter = "none";
+
+        el.classList.add("hub-retirada-ativo-v3");
+    }
+
+    function procurarMenorContainerRetirada() {
+        const todos = Array.from(document.querySelectorAll("a, article, section, div, li"));
+
+        const candidatos = todos
+            .filter(textoContemRetirada)
+            .map(function (el) {
+                return {
+                    el: el,
+                    len: String(el.textContent || "").trim().length
+                };
+            })
+            .filter(function (x) {
+                return x.len >= 20 && x.len <= 1200;
+            });
+
+        if (!candidatos.length) {
+            return null;
+        }
+
+        candidatos.sort(function (a, b) {
+            return a.len - b.len;
+        });
+
+        let card = candidatos[0].el;
+
+        const cardMaisProvavel = card.closest(
+            "a, article, li, .card, .hub-card, .dash-card, .dashboard-card, .report-card, .menu-card, .portal-card"
+        );
+
+        if (cardMaisProvavel && textoContemRetirada(cardMaisProvavel)) {
+            card = cardMaisProvavel;
+        }
+
+        return card;
+    }
+
+    function aplicarBadgeVisual(card) {
+        if (!card) {
+            return;
+        }
+
+        const elementos = Array.from(card.querySelectorAll("*"));
+
+        elementos.forEach(function (el) {
+            const txt = norm(el.textContent);
+
+            if (txt === "acessar" || txt.includes("acessar")) {
+                el.classList.add("hub-retirada-badge-v3");
+            }
+        });
+    }
+
+    function ativarCardRetirada() {
+        const card = procurarMenorContainerRetirada();
+
+        if (!card) {
+            return false;
+        }
+
+        trocarTextosNoElemento(card);
+        removerBloqueios(card);
+        aplicarBadgeVisual(card);
+
+        const links = Array.from(card.querySelectorAll("a"));
+
+        if (card.tagName && card.tagName.toLowerCase() === "a") {
+            card.setAttribute("href", ROTA_RETIRADA);
+            card.removeAttribute("target");
+        }
+
+        links.forEach(function (a) {
+            a.setAttribute("href", ROTA_RETIRADA);
+            a.removeAttribute("target");
+            removerBloqueios(a);
+        });
+
+        if (!(card.tagName && card.tagName.toLowerCase() === "a")) {
+            card.setAttribute("role", "link");
+            card.setAttribute("tabindex", "0");
+            card.setAttribute("data-href", ROTA_RETIRADA);
+
+            if (!card.dataset.retiradaClickV3) {
+                card.dataset.retiradaClickV3 = "1";
+
+                card.addEventListener("click", function (ev) {
+                    const alvo = ev.target;
+
+                    if (alvo && alvo.closest && alvo.closest("a")) {
+                        return;
+                    }
+
+                    window.location.href = ROTA_RETIRADA;
+                });
+
+                card.addEventListener("keydown", function (ev) {
+                    if (ev.key === "Enter" || ev.key === " ") {
+                        ev.preventDefault();
+                        window.location.href = ROTA_RETIRADA;
+                    }
+                });
+            }
+        }
+
+        console.log("[HUB] Card Retirada ativado V3:", ROTA_RETIRADA);
+        return true;
+    }
+
+    function executarComTentativas() {
+        ativarCardRetirada();
+
+        setTimeout(ativarCardRetirada, 200);
+        setTimeout(ativarCardRetirada, 700);
+        setTimeout(ativarCardRetirada, 1500);
+    }
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", executarComTentativas);
+    } else {
+        executarComTentativas();
+    }
+
+    const obs = new MutationObserver(function () {
+        ativarCardRetirada();
+    });
+
+    obs.observe(document.documentElement, {
+        childList: true,
+        subtree: true
+    });
+})();
+/* === FIM HUB RETIRADA ATIVA V3 GLOBAL === */
+</script>
+
+
+{% endblock %}
+
+{% block content %}
+<main class="main">
+  <a href="{{ url_for('area_view', area_slug='adm') }}" class="breadcrumb-link">
+    <div class="breadcrumb">
+      <i class="fa-solid fa-house"></i> Home
+      <i class="fa-solid fa-chevron-right"></i> ADM
+      <i class="fa-solid fa-chevron-right"></i>
+      <strong style="color:var(--text-primary);">Desconexão</strong>
+    </div>
+  </a>
+
+  <div class="area-header">
+    <div class="area-icon"><i class="fa-solid fa-plug-circle-xmark"></i></div>
+    <div class="area-info">
+      <h2>Desconexão</h2>
+      <p>Indicadores da Área de Desconexão · Regional Norte</p>
+    </div>
+  </div>
+
+  <h2 class="section-title">Dashboards</h2>
+  <div class="cards-grid fix-hub-card-soon" role="link" tabindex="-1" aria-disabled="true">
+
+    <a href="/dash/quebra/" class="card-link">
+      <div class="card">
+        <div class="card-icon red"><i class="fa-solid fa-trophy"></i></div>
+        <h3 class="card-title">Visão Executiva</h3>
+        <p class="card-desc">Indicadores estratégicos C-level (4 KPIs + 6 gráficos)</p>
+        <div class="card-meta"><span>EM BREVE</span><i class="fa-solid fa-arrow-right"></i></div>
+      </div>
+    
+<span class="hub-card-arrow" style="float:right;color:#E60000;font-size:1.4rem;font-weight:700;">→</span>
+</a>
+
+    <div class="card-link">
+      <div class="card disabled">
+        <div class="card-icon blue"><i class="fa-solid fa-list-check"></i></div>
+        <h3 class="card-title">Backlog</h3>
+        <p class="card-desc">Backlog OS por cidade, aging e parceiro</p>
+        <div class="card-meta"><span></span><span class="badge-soon">EM BREVE</span></div>
+      </div>
+    </div>
+
+    <div class="card-link">
+      <div class="card disabled">
+        <div class="card-icon orange"><i class="fa-solid fa-calendar-xmark"></i></div>
+        <h3 class="card-title">Quebra de Agenda</h3>
+        <p class="card-desc">Análise de quebras de agenda</p>
+        <div class="card-meta"><span></span><span class="badge-soon">EM BREVE</span></div>
+      </div>
+    </div>
+
+    <a href="#" class="card-link">
+      <div class="card">
+        <div class="card-icon purple"><i class="fa-solid fa-rotate-right"></i></div>
+        <h3 class="card-title">LOG &amp; Reincidência</h3>
+        <p class="card-desc">Histórico de LOG e reincidências</p>
+        <div class="card-meta"><span>EM BREVE</span><i class="fa-solid fa-arrow-right"></i></div>
+      </div>
+    </a>
+
+    <div class="card-link">
+      <div class="card disabled">
+        <div class="card-icon green"><i class="fa-solid fa-truck-ramp-box"></i></div>
+        <h3 class="card-title">Retirada de Equipamentos</h3>
+        <p class="card-desc">Performance TOA · retirada de equipamentos</p>
+        <div class="card-meta"><span></span><span class="badge-soon">EM BREVE</span></div>
+      </div>
+    </div>
+
+    <a href="/dash/parceiras/" class="card-link">
+      <div class="card">
+        <div class="card-icon pink"><i class="fa-solid fa-handshake"></i></div>
+        <h3 class="card-title">Parceiras</h3>
+        <p class="card-desc">Performance por parceira</p>
+        <div class="card-meta"><span>EM BREVE</span><i class="fa-solid fa-arrow-right"></i></div>
+      </div>
+    </a>
+
+  </div>
+</main>
+
+
+<!-- FIX_HUB_SEGURO_CSS: garante cards ativos/clicáveis no Hub Desconexão -->
+<style>
+  a[href="/dash/backlog/"],
+  a[href="/dash/quebra/"],
+  .fix-hub-card-active {
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    cursor: pointer !important;
+    filter: none !important;
+    text-decoration: none !important;
+  }
+
+  a[href="/dash/backlog/"] *,
+  a[href="/dash/quebra/"] *,
+  .fix-hub-card-active * {
+    pointer-events: auto;
+  }
+
+  a[href="/dash/backlog/"] .card-arrow,
+  a[href="/dash/quebra/"] .card-arrow,
+  a[href="/dash/backlog/"] .arrow,
+  a[href="/dash/quebra/"] .arrow,
+  .fix-hub-card-active .card-arrow,
+  .fix-hub-card-active .arrow {
+    opacity: 1 !important;
+    transform: translateX(0) !important;
+    color: #E60000 !important;
+  }
+
+  .fix-hub-card-active:hover {
+    transform: translateY(-2px);
+  }
+
+  .fix-hub-card-soon {
+    opacity: .58 !important;
+    pointer-events: none !important;
+    cursor: not-allowed !important;
+    filter: grayscale(.15);
+  }
+</style>
+
+{% endblock %}

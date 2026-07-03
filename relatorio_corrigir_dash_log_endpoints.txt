@@ -1,0 +1,24 @@
+RELATÓRIO CORRIGIR DASH_LOG ENDPOINTS
+ROOT: C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO
+PY_FILE: C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO\areas\adm\desconexao\dash_log.py
+HTML_FILE: C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO\areas\adm\desconexao\templates\dash_log.html
+========================================================================
+
+PYTHON
+Existe: SIM
+Alterado: NÃO
+Blueprint: bp
+Rotas encontradas:
+  - @bp.route("
+  - @bp.route("
+  - @bp.route("
+
+HTML
+Existe: SIM
+Alterado: NÃO
+Fetches encontrados:
+
+VALIDAÇÃO ESPERADA
+A página /dash/log/ deve chamar APIs JSON existentes.
+Se ainda aparecer Unexpected token '<', a rota existe mas está dando erro interno 500/HTML.
+Nesse caso, verificar o traceback no terminal do Flask.

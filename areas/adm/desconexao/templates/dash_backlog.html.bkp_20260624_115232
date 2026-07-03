@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="dash-title-bar">
+  <div style="display:flex;align-items:center;gap:.5rem;">
+    <i class="bi bi-layers-fill"></i>
+    <span><strong>DESCONEXÃO RNO — BACKLOG</strong></span>
+  </div>
+  <a href="/area/adm/desconexao" class="btn-back">
+    <i class="bi bi-arrow-left"></i> Voltar ao Hub
+  </a>
+</div>
+
+<!-- ============ LINHA 1 DE FILTROS ============ -->
+<div class="filter-bar">
+  <div class="row g-2 mb-2">
+    <div class="col-md-2 col-12">
+      <label>ANO</label>
+      <select id="f-ano" multiple class="form-select form-select-sm"></select>
+    </div>
+    <div class="col-md-2 col-12">
+      <label>MÊS</label>
+      <select id="f-mes" multiple class="form-select form-select-sm"></select>
+    </div>
+    <div class="col-md-2 col-12">
+      <label>DIA</label>
+      <select id="f-dia" multiple class="form-select form-select-sm"></select>
+    </div>
+    <div class="col-md-2 col-12">
+      <label>UF</label>
+      <select id="f-uf" multiple class="form-select form-select-sm"></select>
+    </div>
+    <div class="col-md-2 col-12">
+      <label>CIDADE</label>
+      <select id="f-cidade" multiple class="form-select form-select-sm"></select>
+    </div>
+    <div class="col-md-2 col-12">
+      <label>PARCEIRA</label>
+      <select id="f-parceira" multiple class="form-select form-select-sm"></select>
+    </div>
+  </div>
+  <div class="row g-2">
+    <div class="col-md-4 col-12">
+      <label>SAFRA</label>
+      <select id="f-safra" multiple class="form-select form-select-sm"></select>
+    </div>
+    <div class="col-md-4 col-12">
+      <label>TIPO DESCONEXÃO</label>
+      <select id="f-tipo" multiple class="form-select form-select-sm"></select>
+    </div>
+    <div class="col-md-4 col-12">
+      <label>PENDÊNCIA</label>
+      <select id="f-pend" multiple class="form-select form-select-sm"></select>
+    </div>
+  </div>
+  <div class="text-end mt-2">
+    <button id="btn-limpar" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-eraser"></i> Limpar filtros
+    </button>
+    <span id="status" class="ms-2 small text-muted"></span>
+  </div>
+</div>
+
+<!-- ============ KPIs ============ -->
+<div id="kpis" class="row g-2 mb-3"></div>
+
+<div class="section-header">SITUAÇÃO DE AGENDA E BACKLOG</div>
+<div class="row g-2 mb-3">
+  <div class="col-lg-6 col-12"><div class="graph-card"><div id="g1"></div></div></div>
+  <div class="col-lg-6 col-12"><div class="graph-card"><div id="g2"></div></div></div>
+</div>
+
+<div class="section-header">AGING E MOTIVOS</div>
+<div class="row g-2 mb-3">
+  <div class="col-lg-6 col-12"><div class="graph-card"><div id="g3"></div></div></div>
+  <div class="col-lg-6 col-12"><div class="graph-card"><div id="g4"></div></div></div>
+</div>
+
+<div class="section-header">ANÁLISE POR TIPO E TECNOLOGIA</div>
+<div class="row g-2 mb-3">
+  <div class="col-lg-6 col-12"><div class="graph-card"><div id="g5"></div></div></div>
+  <div class="col-lg-6 col-12"><div class="graph-card"><div id="g6"></div></div></div>
+</div>
+
+<!-- Plotly 2.35.2 (suporta bdata binario - bug 1 evitado) -->
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+
+<script>
+(function(){
+  const FIELDS = ["ANO","MES","DIA","UF","NM_CIDADE","PARCEIRA_NOME",
+                  "SAFRA","DS_TIPO_DESCONEXAO","PENDENCIA"];
+  const FIELD_MAP = {
+    "ANO":"f-ano","MES":"f-mes","DIA":"f-dia","UF":"f-uf",
+    "NM_CIDADE":"f-cidade","PARCEIRA_NOME":"f-parceira",
+    "SAFRA":"f-safra","DS_TIPO_DESCONEXAO":"f-tipo","PENDENCIA":"f-pend"
+  };
+  const KPI_DEF = [
+    {key:"no_backlog",    label:"NO BACKLOG",       icon:"bi-layers-fill",         cor:"#1565C0"},
+    {key:"agenda_hoje",   label:"AGENDA HOJE",      icon:"bi-calendar-check-fill", cor:"#2E7D32"},
+    {key:"nunca_agendado",label:"NUNCA AGENDADO",   icon:"bi-exclamation-octagon-fill", cor:"#E60000"},
+    {key:"agenda_vencida",label:"AGENDA VENCIDA",   icon:"bi-calendar-x-fill",     cor:"#F9A825"},
+  ];
+
+  let ctrl = null;
+  const status = document.getElementById("status");
+
+  function getSel(id){
+    const el = document.getElementById(id);
+    return Array.from(el.selectedOptions).map(o => o.value);
+  }
+  function setOpts(id, vals){
+    const el = document.getElementById(id);
+    const cur = new Set(getSel(id));
+    el.innerHTML = "";
+    (vals||[]).forEach(v => {
+      const o = document.createElement("option");
+      o.value = v; o.textContent = v;
+      if (cur.has(String(v))) o.selected = true;
+      el.appendChild(o);
+    });
+  }
+  function fmt(n){
+    return (n||0).toLocaleString("pt-BR");
+  }
+  function renderKpis(k){
+    const box = document.getElementById("kpis");
+    box.innerHTML = "";
+    KPI_DEF.forEach(d => {
+      const v = (k && k[d.key]) || 0;
+      const col = document.createElement("div");
+      col.className = "col-md-3 col-6";
+      col.innerHTML = `
+        <div class="card shadow-sm text-center kpi-card">
+          <div class="card-body">
+            <div class="mb-1"><i class="bi ${d.icon}" style="font-size:1.8rem;color:${d.cor}"></i></div>
+            <p class="text-muted small mb-1">${d.label}</p>
+            <h4 class="fw-bold" style="color:${d.cor}">${fmt(v)}</h4>
+          </div>
+        </div>`;
+      box.appendChild(col);
+    });
+  }
+  function drawFig(id, fig){
+    const el = document.getElementById(id);
+    if(!fig || !fig.data){
+      Plotly.purge(el);
+      el.innerHTML = '<div class="text-muted text-center p-4">Sem dados</div>';
+      return;
+    }
+    Plotly.react(el, fig.data, fig.layout, {responsive:true, displaylogo:false});
+  }
+  async function refresh(){
+    if (ctrl) ctrl.abort();
+    ctrl = new AbortController();
+    status.textContent = "Atualizando...";
+    const params = new URLSearchParams();
+    FIELDS.forEach(f => {
+      const vals = getSel(FIELD_MAP[f]);
+      if (vals.length) params.set(f, vals.join("||"));
+    });
+    try {
+      const r = await fetch("/dash/backlog/api/refresh?" + params.toString(), {signal: ctrl.signal});
+      const j = await r.json();
+      if (j.error) {
+        status.textContent = "Erro: " + j.error;
+        return;
+      }
+      // options
+      Object.keys(j.options||{}).forEach(k => {
+        if (FIELD_MAP[k]) setOpts(FIELD_MAP[k], j.options[k]);
+      });
+      renderKpis(j.kpis);
+      const figs = j.figs || {};
+      ["g1","g2","g3","g4","g5","g6"].forEach(id => drawFig(id, figs[id]));
+      status.textContent = j.empty ? "Sem resultados" : ("Total: " + fmt(j.total||0));
+    } catch(e) {
+      if (e.name !== "AbortError") {
+        status.textContent = "Erro: " + e.message;
+        console.error(e);
+      }
+    }
+  }
+  FIELDS.forEach(f => {
+    document.getElementById(FIELD_MAP[f]).addEventListener("change", refresh);
+  });
+  document.getElementById("btn-limpar").addEventListener("click", () => {
+    FIELDS.forEach(f => {
+      const el = document.getElementById(FIELD_MAP[f]);
+      Array.from(el.options).forEach(o => o.selected = false);
+    });
+    refresh();
+  });
+  refresh();
+})();
+</script>
+
+{% endblock %}

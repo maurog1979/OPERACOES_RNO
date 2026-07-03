@@ -1,0 +1,233 @@
+# -*- coding: utf-8 -*-
+"""
+dash_parceiras.py - Blueprint do dashboard de Parceiras
+Tabela: safra_enriquecida
+Cascata: SAFRA -> DS_TIPO_DESCONEXAO -> NM_CIDADE -> PENDENCIA
+"""
+import json
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+import plotly.io as pio
+from flask import Blueprint, render_template, request, jsonify
+from flask_login import login_required
+
+from data.db import load_table
+
+bp = Blueprint(
+    "dash_parceiras",
+    __name__,
+    url_prefix="/dash/parceiras",
+    template_folder="templates",
+)
+
+CORES = {
+    "red": "#E60000", "green": "#2E7D32",
+    "blue": "#1565C0", "orange": "#F57C00",
+    "yellow": "#F9A825", "gray": "#9E9E9E",
+}
+
+CATEGORICAL_COLS = [
+    "SAFRA", "DS_TIPO_DESCONEXAO", "NM_CIDADE", "PENDENCIA",
+    "TEM_TOA", "PARCEIRA_NOME", "TOA_STATUS_ATIVIDADE", "TEM_ANALITICO",
+]
+
+FILTER_FIELDS = ["SAFRA", "DS_TIPO_DESCONEXAO", "NM_CIDADE", "PENDENCIA"]
+
+
+def get_df():
+    return load_table("safra_enriquecida", categorical_cols=CATEGORICAL_COLS)
+
+
+def parse_multi(val):
+    if not val:
+        return []
+    return [v for v in val.split("||") if v]
+
+
+def apply_filters(df, filters):
+    for f, vals in filters.items():
+        if vals and f in df.columns:
+            df = df[df[f].astype(str).isin([str(v) for v in vals])]
+    return df
+
+
+def estilo(fig, titulo="", height=350):
+    fig.update_layout(
+        title=dict(text=titulo, font=dict(size=14, color="#333"), x=0.01),
+        template="plotly_white", height=height,
+        margin=dict(l=20, r=20, t=50, b=20),
+        plot_bgcolor="white", paper_bgcolor="white",
+        font=dict(family="Segoe UI", size=11),
+        legend=dict(font_size=10, orientation="h",
+                    yanchor="bottom", y=-0.25, x=0.5, xanchor="center"),
+    )
+    return fig
+
+
+def fig_to_json(fig):
+    return json.loads(pio.to_json(fig))
+
+
+# -------------------------------------------------------------
+# ROTAS
+# -------------------------------------------------------------
+@bp.route("/")
+@login_required
+def index():
+    return render_template("dash_parceiras.html")
+
+
+@bp.route("/api/options")
+@login_required
+def api_options():
+    df = get_df()
+    if df.empty:
+        return jsonify({f: [] for f in FILTER_FIELDS})
+
+    filters = {}
+    options = {}
+    for f in FILTER_FIELDS:
+        view = apply_filters(df.copy(), filters)
+        if f in view.columns:
+            vals = sorted([str(v) for v in view[f].dropna().unique()])
+        else:
+            vals = []
+        options[f] = vals
+        sel = parse_multi(request.args.get(f, ""))
+        if sel:
+            filters[f] = sel
+    return jsonify(options)
+
+
+@bp.route("/api/data")
+@login_required
+def api_data():
+    df = get_df()
+    if df.empty:
+        return jsonify({"empty": True})
+
+    filters = {f: parse_multi(request.args.get(f, "")) for f in FILTER_FIELDS}
+    df = apply_filters(df, filters)
+
+    if df.empty:
+        return jsonify({"empty": True})
+
+    # -------- KPIs --------
+    total = len(df)
+    tem_anl = int((df["TEM_ANALITICO"].astype(str) == "SIM").sum()) if "TEM_ANALITICO" in df.columns else 0
+    n_parc  = int(df["PARCEIRA_NOME"].dropna().nunique()) if "PARCEIRA_NOME" in df.columns else 0
+    recup   = int((df["PENDENCIA"].astype(str) == "RECUPERADO").sum()) if "PENDENCIA" in df.columns else 0
+    pct_rec = round(recup / total * 100, 1) if total > 0 else 0
+    if "TEM_TOA" in df.columns and "PENDENCIA" in df.columns:
+        pend_toa = int(len(df[(df["PENDENCIA"].astype(str) == "PENDENTE") &
+                              (df["TEM_TOA"].astype(str) == "SIM")]))
+    else:
+        pend_toa = 0
+
+    kpis = {
+        "tem_analitico": tem_anl,
+        "parceiras": n_parc,
+        "pct_recuperacao": pct_rec,
+        "pend_toa": pend_toa,
+    }
+
+    figs = {}
+
+    # -------- G1: % Recuperacao por Parceira (barras H, gradiente) --------
+    if "PARCEIRA_NOME" in df.columns and "PENDENCIA" in df.columns:
+        dfp = df[df["PARCEIRA_NOME"].notna()]
+        if not dfp.empty:
+            d1t = dfp.groupby("PARCEIRA_NOME", observed=True).size().reset_index(name="TOT")
+            d1r = dfp[dfp["PENDENCIA"].astype(str) == "RECUPERADO"] \
+                    .groupby("PARCEIRA_NOME", observed=True).size().reset_index(name="REC")
+            d1 = d1t.merge(d1r, on="PARCEIRA_NOME", how="left").fillna(0)
+            d1["PCT"] = (d1["REC"] / d1["TOT"] * 100).round(1)
+            d1 = d1.sort_values("PCT", ascending=True)
+            fig = px.bar(d1, x="PCT", y="PARCEIRA_NOME", orientation="h", text="PCT",
+                         color="PCT",
+                         color_continuous_scale=["#E60000", "#F9A825", "#2E7D32"])
+            fig.update_traces(texttemplate="%{text:.1f}%",
+                              textposition="outside", textfont_size=11)
+            fig.update_layout(coloraxis_showscale=False,
+                              xaxis_title="% Recuperacao", yaxis_title="")
+            figs["g1"] = fig_to_json(estilo(fig, "% Recuperacao por Parceira", 400))
+
+    # -------- G2: Volume por Parceira --------
+    if "PARCEIRA_NOME" in df.columns:
+        dfp = df[df["PARCEIRA_NOME"].notna()]
+        if not dfp.empty:
+            d2 = dfp.groupby("PARCEIRA_NOME", observed=True).size().reset_index(name="QTD")
+            d2 = d2.sort_values("QTD", ascending=True)
+            fig = px.bar(d2, x="QTD", y="PARCEIRA_NOME", orientation="h",
+                         text="QTD", color_discrete_sequence=[CORES["blue"]])
+            fig.update_traces(textposition="outside", textfont_size=11)
+            fig.update_layout(xaxis_title="Volume", yaxis_title="")
+            figs["g2"] = fig_to_json(estilo(fig, "Volume de Contratos por Parceira", 400))
+
+    # -------- G3: % Recup por Parceira x SAFRA --------
+    if all(c in df.columns for c in ["PARCEIRA_NOME", "SAFRA", "PENDENCIA"]):
+        dfp = df[df["PARCEIRA_NOME"].notna()]
+        if not dfp.empty:
+            d3r = dfp[dfp["PENDENCIA"].astype(str) == "RECUPERADO"] \
+                    .groupby(["PARCEIRA_NOME", "SAFRA"], observed=True).size().reset_index(name="REC")
+            d3t = dfp.groupby(["PARCEIRA_NOME", "SAFRA"], observed=True).size().reset_index(name="TOT")
+            d3 = d3t.merge(d3r, on=["PARCEIRA_NOME", "SAFRA"], how="left").fillna(0)
+            d3["PCT"] = (d3["REC"] / d3["TOT"] * 100).round(1)
+            fig = px.bar(d3, x="PARCEIRA_NOME", y="PCT", color="SAFRA",
+                         barmode="group", text="PCT",
+                         color_discrete_sequence=[CORES["blue"], CORES["orange"],
+                                                  CORES["red"], CORES["green"]])
+            fig.update_traces(texttemplate="%{text:.1f}%",
+                              textposition="outside", textfont_size=9)
+            fig.update_layout(xaxis_title="", yaxis_title="% Recuperacao")
+            figs["g3"] = fig_to_json(estilo(fig, "% Recuperacao: Parceira x SAFRA", 400))
+
+    # -------- G4: % Recup por Parceira x Tipo Desconexao --------
+    if all(c in df.columns for c in ["PARCEIRA_NOME", "DS_TIPO_DESCONEXAO", "PENDENCIA"]):
+        dfp = df[df["PARCEIRA_NOME"].notna()]
+        if not dfp.empty:
+            d4r = dfp[dfp["PENDENCIA"].astype(str) == "RECUPERADO"] \
+                    .groupby(["PARCEIRA_NOME", "DS_TIPO_DESCONEXAO"], observed=True).size().reset_index(name="REC")
+            d4t = dfp.groupby(["PARCEIRA_NOME", "DS_TIPO_DESCONEXAO"], observed=True).size().reset_index(name="TOT")
+            d4 = d4t.merge(d4r, on=["PARCEIRA_NOME", "DS_TIPO_DESCONEXAO"], how="left").fillna(0)
+            d4["PCT"] = (d4["REC"] / d4["TOT"] * 100).round(1)
+            cm4 = {}
+            for v in d4["DS_TIPO_DESCONEXAO"].unique():
+                cm4[v] = CORES["blue"] if "OP" in str(v).upper() else CORES["orange"]
+            fig = px.bar(d4, x="PARCEIRA_NOME", y="PCT", color="DS_TIPO_DESCONEXAO",
+                         barmode="group", text="PCT", color_discrete_map=cm4)
+            fig.update_traces(texttemplate="%{text:.1f}%",
+                              textposition="outside", textfont_size=9)
+            fig.update_layout(xaxis_title="", yaxis_title="% Recuperacao")
+            figs["g4"] = fig_to_json(estilo(fig, "% Recuperacao: Parceira x Tipo Desconexao", 400))
+
+    # -------- G5: Parceiras com mais Pendentes --------
+    if "PARCEIRA_NOME" in df.columns and "PENDENCIA" in df.columns:
+        dfp = df[(df["PARCEIRA_NOME"].notna()) &
+                 (df["PENDENCIA"].astype(str) == "PENDENTE")]
+        if not dfp.empty:
+            d5 = dfp.groupby("PARCEIRA_NOME", observed=True).size().reset_index(name="QTD")
+            d5 = d5.sort_values("QTD", ascending=True)
+            fig = px.bar(d5, x="QTD", y="PARCEIRA_NOME", orientation="h",
+                         text="QTD", color_discrete_sequence=[CORES["red"]])
+            fig.update_traces(textposition="outside", textfont_size=11)
+            fig.update_layout(xaxis_title="Pendentes", yaxis_title="")
+            figs["g5"] = fig_to_json(estilo(fig, "Parceiras com mais Pendentes", 400))
+
+    # -------- G6: Status TOA por Parceira (empilhado) --------
+    if "PARCEIRA_NOME" in df.columns and "TOA_STATUS_ATIVIDADE" in df.columns:
+        dfp = df[df["PARCEIRA_NOME"].notna()]
+        if not dfp.empty:
+            d6 = dfp.groupby(["PARCEIRA_NOME", "TOA_STATUS_ATIVIDADE"],
+                             observed=True).size().reset_index(name="QTD")
+            fig = px.bar(d6, x="PARCEIRA_NOME", y="QTD",
+                         color="TOA_STATUS_ATIVIDADE",
+                         barmode="stack", text="QTD")
+            fig.update_traces(textposition="inside", textfont_size=10,
+                              textfont_color="white")
+            fig.update_layout(xaxis_title="", legend_title="",
+                              yaxis_title="Volume")
+            figs["g6"] = fig_to_json(estilo(fig, "Status TOA por Parceira", 400))
+
+    return jsonify({"empty": False, "kpis": kpis, "figs": figs})

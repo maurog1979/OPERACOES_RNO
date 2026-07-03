@@ -1,0 +1,661 @@
+# -*- coding: utf-8 -*-
+"""
+Dashboard Retirada de Equipamentos — Portal Operações RNO
+FASE 2B — versão migrada de Dash para Flask/Jinja.
+
+Base:
+- safra_enriquecida
+- universo: TEM_TOA = 'SIM'
+
+Rota:
+- /dash/retirada/
+
+APIs:
+- /dash/retirada/api/dados
+- /dash/retirada/api/reload
+"""
+
+from flask import Blueprint, render_template, jsonify, request
+from flask_login import login_required
+from sqlalchemy import create_engine, text
+import pandas as pd
+import numpy as np
+import unicodedata
+import traceback
+
+
+dash_retirada_bp = Blueprint(
+    "dash_retirada",
+    __name__,
+    url_prefix="/dash/retirada"
+)
+
+DB = "mysql+pymysql://root:@localhost:3306/safra"
+
+_DF_CACHE = None
+_COLUMNS_CACHE = None
+
+
+STATUS_PERFORMANCE = {
+    "concluído": "CONCLUIDA",
+    "concluido": "CONCLUIDA",
+    "iniciado": "EM ABERTO",
+    "em rota": "EM ABERTO",
+    "pendente": "EM ABERTO",
+    "suspenso": "FALHA",
+    "cancelado": "FALHA",
+    "não concluído": "FALHA",
+    "nao concluido": "FALHA",
+}
+
+
+CORES_PERF = {
+    "CONCLUIDA": "#2E7D32",
+    "EM ABERTO": "#F9A825",
+    "FALHA": "#E60000",
+}
+
+
+PERF_ORDER = ["CONCLUIDA", "EM ABERTO", "FALHA"]
+
+
+LOGICAL_COLS = {
+    "CD_NET": ["CD_NET"],
+    "UF": ["UF"],
+    "NM_CIDADE": ["NM_CIDADE", "CIDADE", "G3"],
+    "SAFRA": ["SAFRA"],
+    "DS_TIPO_DESCONEXAO": ["DS_TIPO_DESCONEXAO", "TIPO_DESCONEXAO", "TIPO"],
+    "PARCEIRA_NOME": ["PARCEIRA_NOME", "PARCEIRA"],
+    "PENDENCIA": ["PENDENCIA", "PENDÊNCIA"],
+    "TOA_RECURSO": ["TOA_RECURSO"],
+    "TOA_PARCEIRA": ["TOA_PARCEIRA"],
+    "TOA_STATUS": ["TOA_STATUS"],
+    "TOA_VALIDACAO": ["TOA_VALIDACAO", "TOA_VALIDAÇÃO"],
+    "TOA_CONCLUIU": ["TOA_CONCLUIU"],
+    "TOA_MOTIVO_FECHAMENTO": ["TOA_MOTIVO_FECHAMENTO"],
+    "TOA_HABILIDADE": ["TOA_HABILIDADE"],
+    "TOA_ULT_DATA": ["TOA_ULT_DATA", "TOA_DATA", "DATA_TOA"],
+    "SITUACAO_AGENDA": ["SITUACAO_AGENDA", "SITUAÇÃO_AGENDA"],
+    "TEM_TOA": ["TEM_TOA"],
+}
+
+
+FILTERS = {
+    "ano": "ANO",
+    "mes": "MES",
+    "dia": "DIA",
+    "uf": "UF",
+    "cidade": "NM_CIDADE",
+    "parceira": "PARCEIRA_NOME",
+    "safra": "SAFRA",
+    "tipo": "DS_TIPO_DESCONEXAO",
+    "status": "TOA_STATUS",
+    "pend": "PENDENCIA",
+}
+
+
+def _engine():
+    return create_engine(DB, pool_pre_ping=True)
+
+
+def _norm_text(value):
+    if pd.isna(value):
+        return ""
+    return str(value).strip()
+
+
+def _norm_key(value):
+    txt = _norm_text(value).lower()
+    txt = unicodedata.normalize("NFKD", txt)
+    txt = "".join(ch for ch in txt if not unicodedata.combining(ch))
+    return txt
+
+
+def _get_available_columns():
+    global _COLUMNS_CACHE
+
+    if _COLUMNS_CACHE is not None:
+        return _COLUMNS_CACHE
+
+    engine = _engine()
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(text("SHOW COLUMNS FROM safra_enriquecida")).fetchall()
+        _COLUMNS_CACHE = [r[0] for r in rows]
+        return _COLUMNS_CACHE
+    finally:
+        engine.dispose()
+
+
+def _resolve_columns():
+    available = _get_available_columns()
+    resolved = {}
+
+    for logical, candidates in LOGICAL_COLS.items():
+        found = None
+        for candidate in candidates:
+            if candidate in available:
+                found = candidate
+                break
+        resolved[logical] = found
+
+    return resolved
+
+
+def _build_select_sql():
+    resolved = _resolve_columns()
+    select_parts = []
+
+    for logical, physical in resolved.items():
+        if logical == "TEM_TOA":
+            continue
+
+        if physical:
+            if physical == logical:
+                select_parts.append(f"`{physical}`")
+            else:
+                select_parts.append(f"`{physical}` AS `{logical}`")
+
+    if not select_parts:
+        raise RuntimeError("Nenhuma coluna esperada encontrada em safra_enriquecida.")
+
+    where_clause = ""
+    if resolved.get("TEM_TOA"):
+        where_clause = "WHERE `TEM_TOA` = 'SIM'"
+
+    sql = f"""
+        SELECT
+            {", ".join(select_parts)}
+        FROM safra_enriquecida
+        {where_clause}
+    """
+    return sql
+
+
+def carregar_dados(force=False):
+    global _DF_CACHE
+
+    if _DF_CACHE is not None and not force:
+        return _DF_CACHE
+
+    print("[RETIRADA] Carregando dados em memória...")
+
+    engine = _engine()
+    try:
+        sql = _build_select_sql()
+        df = pd.read_sql(sql, engine)
+
+        for logical in LOGICAL_COLS:
+            if logical == "TEM_TOA":
+                continue
+            if logical not in df.columns:
+                df[logical] = pd.NA
+
+        text_cols = [
+            "CD_NET",
+            "UF",
+            "NM_CIDADE",
+            "SAFRA",
+            "DS_TIPO_DESCONEXAO",
+            "PARCEIRA_NOME",
+            "PENDENCIA",
+            "TOA_RECURSO",
+            "TOA_PARCEIRA",
+            "TOA_STATUS",
+            "TOA_VALIDACAO",
+            "TOA_CONCLUIU",
+            "TOA_MOTIVO_FECHAMENTO",
+            "TOA_HABILIDADE",
+            "SITUACAO_AGENDA",
+        ]
+
+        for col in text_cols:
+            if col in df.columns:
+                df[col] = df[col].apply(_norm_text)
+
+        df["TOA_ULT_DATA_DT"] = pd.to_datetime(
+            df["TOA_ULT_DATA"],
+            errors="coerce",
+            dayfirst=True
+        )
+
+        df["ANO"] = df["TOA_ULT_DATA_DT"].dt.year.astype("Int64")
+        df["MES"] = df["TOA_ULT_DATA_DT"].dt.month.astype("Int64")
+        df["DIA"] = df["TOA_ULT_DATA_DT"].dt.day.astype("Int64")
+
+        status_norm = df["TOA_STATUS"].apply(_norm_key)
+
+        perf_map_norm = {
+            _norm_key(k): v
+            for k, v in STATUS_PERFORMANCE.items()
+        }
+
+        df["PERFORMANCE"] = status_norm.map(perf_map_norm).fillna("FALHA")
+
+        cat_cols = [
+            "UF",
+            "NM_CIDADE",
+            "SAFRA",
+            "DS_TIPO_DESCONEXAO",
+            "PARCEIRA_NOME",
+            "PENDENCIA",
+            "TOA_PARCEIRA",
+            "TOA_STATUS",
+            "TOA_VALIDACAO",
+            "TOA_MOTIVO_FECHAMENTO",
+            "TOA_HABILIDADE",
+            "SITUACAO_AGENDA",
+            "PERFORMANCE",
+        ]
+
+        for col in cat_cols:
+            if col in df.columns:
+                try:
+                    df[col] = df[col].astype("category")
+                except Exception:
+                    pass
+
+        _DF_CACHE = df
+
+        mem = df.memory_usage(deep=True).sum() / 1024**2
+        print(f"[RETIRADA] Cache carregado: {len(df):,} linhas | {mem:.1f} MB")
+
+        return df
+
+    except Exception as exc:
+        print("[RETIRADA] Erro ao carregar dados:")
+        print(exc)
+        traceback.print_exc()
+        return pd.DataFrame()
+
+    finally:
+        engine.dispose()
+
+
+def _clean_values(values):
+    if not values:
+        return []
+
+    clean = []
+    for v in values:
+        if v is None:
+            continue
+        s = str(v).strip()
+        if not s:
+            continue
+        if s.lower() in ["nan", "nat", "<na>", "none"]:
+            continue
+        clean.append(s)
+
+    return clean
+
+
+def _request_filters():
+    filtros = {}
+
+    for key in FILTERS:
+        values = request.args.getlist(key)
+        filtros[key] = _clean_values(values)
+
+    return filtros
+
+
+def _series_as_str(series):
+    return series.astype("string").fillna("").astype(str).str.strip()
+
+
+def aplicar_filtros(df, filtros, ignore=None):
+    if df.empty:
+        return df
+
+    out = df
+
+    for key, values in filtros.items():
+        if ignore == key:
+            continue
+
+        values = _clean_values(values)
+        if not values:
+            continue
+
+        col = FILTERS.get(key)
+        if not col or col not in out.columns:
+            continue
+
+        out = out[_series_as_str(out[col]).isin(values)]
+
+    return out
+
+
+def _sort_options(values, numeric=False):
+    values = _clean_values(values)
+
+    if numeric:
+        def nkey(x):
+            try:
+                return int(float(x))
+            except Exception:
+                return 999999
+        return sorted(values, key=nkey)
+
+    return sorted(values, key=lambda x: str(x).upper())
+
+
+def _option_list(df, col, numeric=False):
+    if df.empty or col not in df.columns:
+        return []
+
+    values = _series_as_str(df[col])
+    values = values[values != ""].dropna().unique().tolist()
+    values = _sort_options(values, numeric=numeric)
+
+    return [{"label": str(v), "value": str(v)} for v in values]
+
+
+def montar_opcoes(df, filtros):
+    opcoes = {}
+
+    for key, col in FILTERS.items():
+        base = aplicar_filtros(df, filtros, ignore=key)
+        numeric = key in ["ano", "mes", "dia"]
+        opcoes[key] = _option_list(base, col, numeric=numeric)
+
+    return opcoes
+
+
+def _empty_stacked():
+    return {
+        "labels": [],
+        "series": {p: [] for p in PERF_ORDER},
+        "totals": [],
+    }
+
+
+def stacked_percent(df, group_col, top=15):
+    if df.empty or group_col not in df.columns:
+        return _empty_stacked()
+
+    base = df[_series_as_str(df[group_col]) != ""].copy()
+    if base.empty:
+        return _empty_stacked()
+
+    totals = base.groupby(group_col, observed=True).size().sort_values(ascending=False)
+    if top:
+        totals = totals.head(top)
+
+    base = base[base[group_col].isin(totals.index)]
+
+    d = (
+        base.groupby([group_col, "PERFORMANCE"], observed=True)
+        .size()
+        .reset_index(name="QTD")
+    )
+
+    if d.empty:
+        return _empty_stacked()
+
+    pivot = d.pivot_table(
+        index=group_col,
+        columns="PERFORMANCE",
+        values="QTD",
+        aggfunc="sum",
+        fill_value=0,
+        observed=True,
+    )
+
+    for p in PERF_ORDER:
+        if p not in pivot.columns:
+            pivot[p] = 0
+
+    pivot = pivot[PERF_ORDER]
+    pivot["TOTAL"] = pivot.sum(axis=1)
+
+    for p in PERF_ORDER:
+        pivot[p] = np.where(
+            pivot["TOTAL"] > 0,
+            pivot[p] / pivot["TOTAL"] * 100,
+            0,
+        )
+
+    pivot["CONCLUIDA_SORT"] = pivot["CONCLUIDA"]
+    pivot = pivot.sort_values(["CONCLUIDA_SORT", "TOTAL"], ascending=[True, True])
+
+    return {
+        "labels": [str(x) for x in pivot.index.tolist()],
+        "series": {
+            p: [round(float(v), 1) for v in pivot[p].tolist()]
+            for p in PERF_ORDER
+        },
+        "totals": [int(v) for v in pivot["TOTAL"].tolist()],
+    }
+
+
+def stacked_qtd(df, group_col, top=10):
+    if df.empty or group_col not in df.columns:
+        return _empty_stacked()
+
+    base = df[_series_as_str(df[group_col]) != ""].copy()
+    if base.empty:
+        return _empty_stacked()
+
+    totals = base.groupby(group_col, observed=True).size().sort_values(ascending=False)
+    if top:
+        totals = totals.head(top)
+
+    base = base[base[group_col].isin(totals.index)]
+
+    d = (
+        base.groupby([group_col, "PERFORMANCE"], observed=True)
+        .size()
+        .reset_index(name="QTD")
+    )
+
+    if d.empty:
+        return _empty_stacked()
+
+    pivot = d.pivot_table(
+        index=group_col,
+        columns="PERFORMANCE",
+        values="QTD",
+        aggfunc="sum",
+        fill_value=0,
+        observed=True,
+    )
+
+    for p in PERF_ORDER:
+        if p not in pivot.columns:
+            pivot[p] = 0
+
+    pivot = pivot[PERF_ORDER]
+    pivot["TOTAL"] = pivot.sum(axis=1)
+    pivot = pivot.sort_values("TOTAL", ascending=True)
+
+    return {
+        "labels": [str(x) for x in pivot.index.tolist()],
+        "series": {
+            p: [int(v) for v in pivot[p].tolist()]
+            for p in PERF_ORDER
+        },
+        "totals": [int(v) for v in pivot["TOTAL"].tolist()],
+    }
+
+
+def donut(df, col, top=None):
+    if df.empty or col not in df.columns:
+        return {"labels": [], "values": []}
+
+    base = df[_series_as_str(df[col]) != ""].copy()
+    if base.empty:
+        return {"labels": [], "values": []}
+
+    vc = base[col].value_counts(dropna=True)
+
+    if top:
+        vc = vc.head(top)
+
+    return {
+        "labels": [str(x) for x in vc.index.tolist()],
+        "values": [int(x) for x in vc.values.tolist()],
+    }
+
+
+def categorizar_validacao(txt):
+    t = _norm_key(txt).upper()
+
+    if "ERRO" in t:
+        return "ERRO BAIXA"
+    if "REAGENDAMENTO" in t:
+        return "REAGENDAMENTO"
+    if "BAIXA REALIZADA COM SUCESSO" in t or "SUCESSO" in t:
+        return "SUCESSO"
+    if "MOVIMENTACOES" in t or "MOVIMENTACOES" in t or "SOLICITACAO" in t:
+        return "PENDENTE VALIDACAO"
+
+    return "OUTROS"
+
+
+def donut_validacao(df):
+    if df.empty or "TOA_VALIDACAO" not in df.columns:
+        return {"labels": [], "values": []}
+
+    base = df[_series_as_str(df["TOA_VALIDACAO"]) != ""].copy()
+    if base.empty:
+        return {"labels": [], "values": []}
+
+    base["CATEGORIA_VALIDACAO"] = base["TOA_VALIDACAO"].apply(categorizar_validacao)
+
+    ordem = [
+        "SUCESSO",
+        "REAGENDAMENTO",
+        "ERRO BAIXA",
+        "PENDENTE VALIDACAO",
+        "OUTROS",
+    ]
+
+    vc = base["CATEGORIA_VALIDACAO"].value_counts()
+    labels = [x for x in ordem if x in vc.index]
+
+    return {
+        "labels": labels,
+        "values": [int(vc[x]) for x in labels],
+    }
+
+
+def stacked_percent_safra_tipo(df, top=20):
+    if df.empty:
+        return _empty_stacked()
+
+    required = ["SAFRA", "DS_TIPO_DESCONEXAO", "PERFORMANCE"]
+    for col in required:
+        if col not in df.columns:
+            return _empty_stacked()
+
+    base = df[
+        (_series_as_str(df["SAFRA"]) != "") &
+        (_series_as_str(df["DS_TIPO_DESCONEXAO"]) != "")
+    ].copy()
+
+    if base.empty:
+        return _empty_stacked()
+
+    base["SAFRA_TIPO"] = (
+        _series_as_str(base["SAFRA"]) +
+        " | " +
+        _series_as_str(base["DS_TIPO_DESCONEXAO"])
+    )
+
+    return stacked_percent(base, "SAFRA_TIPO", top=top)
+
+
+def montar_kpis(df):
+    total = int(len(df))
+
+    if total == 0:
+        return {
+            "total": "0",
+            "concluida": "0%",
+            "aberto": "0%",
+            "falha": "0%",
+            "qtd_concluida": 0,
+            "qtd_aberto": 0,
+            "qtd_falha": 0,
+        }
+
+    concluida = int((df["PERFORMANCE"] == "CONCLUIDA").sum())
+    aberto = int((df["PERFORMANCE"] == "EM ABERTO").sum())
+    falha = int((df["PERFORMANCE"] == "FALHA").sum())
+
+    pct_concl = round(concluida / total * 100, 1)
+    pct_aberto = round(aberto / total * 100, 1)
+    pct_falha = round(falha / total * 100, 1)
+
+    return {
+        "total": f"{total:,}".replace(",", "."),
+        "concluida": f"{pct_concl}%",
+        "aberto": f"{pct_aberto}%",
+        "falha": f"{pct_falha}%",
+        "qtd_concluida": concluida,
+        "qtd_aberto": aberto,
+        "qtd_falha": falha,
+    }
+
+
+@dash_retirada_bp.route("/")
+@login_required
+def index():
+    return render_template("dash_retirada.html")
+
+
+@dash_retirada_bp.route("/api/dados")
+@login_required
+def api_dados():
+    df = carregar_dados()
+    filtros = _request_filters()
+
+    if df.empty:
+        return jsonify({
+            "ok": False,
+            "message": "Sem dados carregados para Retirada.",
+            "kpis": montar_kpis(df),
+            "opcoes": {},
+            "charts": {},
+        })
+
+    filtrado = aplicar_filtros(df, filtros)
+    opcoes = montar_opcoes(df, filtros)
+
+    payload = {
+        "ok": True,
+        "total_linhas_cache": int(len(df)),
+        "total_linhas_filtrado": int(len(filtrado)),
+        "kpis": montar_kpis(filtrado),
+        "opcoes": opcoes,
+        "charts": {
+            "g1_cidade_pct": stacked_percent(filtrado, "NM_CIDADE", top=15),
+            "g2_parceira_qtd": stacked_qtd(filtrado, "PARCEIRA_NOME", top=10),
+            "g3_status": donut(filtrado, "TOA_STATUS"),
+            "g4_validacao": donut_validacao(filtrado),
+            "g5_safra_tipo_pct": stacked_percent_safra_tipo(filtrado, top=20),
+            "g6_habilidade_qtd": stacked_qtd(filtrado, "TOA_HABILIDADE", top=10),
+        },
+    }
+
+    return jsonify(payload)
+
+
+@dash_retirada_bp.route("/api/reload")
+@login_required
+def api_reload():
+    df = carregar_dados(force=True)
+    return jsonify({
+        "ok": True,
+        "message": "Cache Retirada recarregado.",
+        "linhas": int(len(df)),
+    })
+
+
+def warmup_dash_retirada():
+    """
+    Função opcional para ser chamada no create_app/preload.
+    """
+    carregar_dados(force=True)

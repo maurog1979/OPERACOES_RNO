@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}{{ area.nome }}{% endblock %}
+
+{% block content %}
+<main class="main">
+  <a href="{{ url_for('home') }}" class="breadcrumb-link">
+    <div class="breadcrumb">
+      <i class="fa-solid fa-house"></i> Home
+      <i class="fa-solid fa-chevron-right"></i>
+      <strong style="color:var(--text-primary);">{{ area.nome }}</strong>
+    </div>
+  </a>
+
+  <div class="area-header">
+    <div class="area-icon"><i class="fa-solid {{ area.icone }}"></i></div>
+    <div class="area-info">
+      <h2>Área {{ area.nome }}</h2>
+      <p>{{ area.descricao }} · Regional Norte</p>
+    </div>
+  </div>
+
+  <h2 class="section-title">Setores</h2>
+  <div class="cards-grid">
+    {% for setor in area.setores %}
+      {% if setor.ativo %}
+        <a href="{{ url_for('setor_view', area_slug=area.slug, setor_slug=setor.slug) }}" class="card-link">
+          <div class="card">
+            <div class="card-icon {{ setor.cor }}"><i class="fa-solid {{ setor.icone }}"></i></div>
+            <h3 class="card-title">{{ setor.nome }}</h3>
+            <p class="card-desc">{{ setor.descricao }}</p>
+            <div class="card-meta"><span>{{ setor.meta }}</span><i class="fa-solid fa-arrow-right"></i></div>
+          </div>
+        </a>
+      {% else %}
+        <a href="{{ url_for('setor_view', area_slug=area.slug, setor_slug=setor.slug) }}" class="card-link">
+          <div class="card disabled">
+            <div class="card-icon {{ setor.cor }}"><i class="fa-solid {{ setor.icone }}"></i></div>
+            <h3 class="card-title">{{ setor.nome }}</h3>
+            <p class="card-desc">{{ setor.descricao }}</p>
+            <div class="card-meta"><span></span><span class="badge-soon">Em Breve</span></div>
+          </div>
+        </a>
+      {% endif %}
+    {% endfor %}
+  </div>
+</main>
+{% endblock %}

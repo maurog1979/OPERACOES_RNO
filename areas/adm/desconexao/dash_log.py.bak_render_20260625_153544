@@ -1,0 +1,532 @@
+# -*- coding: utf-8 -*-
+"""
+Dashboard LOG & Reincidência — FASE 2B
+Correção isolada: endpoints JSON estáveis para /dash/log/.
+
+Rotas públicas:
+- /dash/log/
+- /dash/log/api/options
+- /dash/log/api/data
+"""
+
+import json
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+import plotly.io as pio
+from flask import Blueprint, render_template, jsonify, request
+
+from data.db import load_table
+
+
+bp = Blueprint(
+    "dash_log",
+    __name__,
+    url_prefix="/dash/log",
+    template_folder="templates",
+)
+
+TABLE = "safra_enriquecida"
+
+FILTROS_CASCATA = [
+    "SAFRA",
+    "DS_TIPO_DESCONEXAO",
+    "NM_CIDADE",
+    "PENDENCIA",
+]
+
+CATEGORICAL_COLS = [
+    "SAFRA",
+    "DS_TIPO_DESCONEXAO",
+    "NM_CIDADE",
+    "PENDENCIA",
+    "FAIXA_LOG",
+    "ANL_MOTIVO_REAGENDA",
+    "ANL_QUEBRA_RESPONSAVEL",
+    "ANL_QUEBRA_CENARIO",
+    "ANL_TIPO_TRATAMENTO",
+    "LOG_ULT_TIPO_OS",
+]
+
+CORES = {
+    "red": "#E60000",
+    "red_dark": "#B71C1C",
+    "green": "#2E7D32",
+    "blue": "#1565C0",
+    "orange": "#F57C00",
+    "yellow": "#F9A825",
+    "gray": "#9E9E9E",
+}
+
+CORES_LOG = {
+    "SEM LOG": "#9E9E9E",
+    "1x": "#1565C0",
+    "2-3x": "#F9A825",
+    "4-5x": "#F57C00",
+    "6x+": "#E60000",
+}
+
+FAIXA_SEM_LOG = "SEM LOG"
+FAIXA_CRITICA = "6x+"
+
+
+# ------------------------------------------------------------
+# Helpers
+# ------------------------------------------------------------
+
+def prepare_df():
+    """
+    Carrega a tabela principal.
+    Tenta usar categorical_cols quando o data.db suporta.
+    Se não suportar, chama load_table simples.
+    """
+    try:
+        df = load_table(TABLE, categorical_cols=CATEGORICAL_COLS)
+    except TypeError:
+        df = load_table(TABLE)
+
+    if df is None:
+        df = pd.DataFrame()
+
+    # Garante que as colunas usadas no dashboard existam.
+    for col in CATEGORICAL_COLS:
+        if col not in df.columns:
+            df[col] = ""
+
+    # Normalização leve para filtros e agrupamentos.
+    for col in CATEGORICAL_COLS:
+        df[col] = df[col].fillna("").astype(str).str.strip()
+
+    return df
+
+
+def limpar_valores(vals):
+    saida = []
+    for v in vals or []:
+        s = str(v).strip()
+        if s and s.lower() != "nan":
+            saida.append(s)
+    return saida
+
+
+def apply_filters(df, filters):
+    if df is None or df.empty:
+        return df
+
+    dff = df.copy()
+
+    for col, vals in filters.items():
+        vals = limpar_valores(vals)
+        if col in dff.columns and vals:
+            dff = dff[dff[col].fillna("").astype(str).isin(vals)]
+
+    return dff
+
+
+def get_options(df, col):
+    if df is None or df.empty or col not in df.columns:
+        return []
+
+    vals = (
+        df[col]
+        .dropna()
+        .astype(str)
+        .str.strip()
+    )
+
+    vals = vals[(vals != "") & (vals.str.lower() != "nan")]
+    return sorted(vals.unique().tolist())
+
+
+def estilo(fig, titulo="", height=350):
+    fig.update_layout(
+        title=dict(text=titulo, font=dict(size=14, color="#333"), x=0.01),
+        template="plotly_white",
+        height=height,
+        margin=dict(l=20, r=20, t=50, b=35),
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        font=dict(family="Inter, Segoe UI, sans-serif", size=11),
+        legend=dict(
+            font_size=10,
+            orientation="h",
+            yanchor="bottom",
+            y=-0.25,
+            x=0.5,
+            xanchor="center",
+        ),
+    )
+    return fig
+
+
+def fig_vazia(msg="Sem dados"):
+    fig = go.Figure()
+    fig.add_annotation(
+        text=msg,
+        showarrow=False,
+        font_size=16,
+        font_color="#999",
+        x=0.5,
+        y=0.5,
+    )
+    fig.update_layout(
+        template="plotly_white",
+        height=350,
+        margin=dict(l=20, r=20, t=40, b=20),
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        xaxis=dict(visible=False),
+        yaxis=dict(visible=False),
+    )
+    return fig
+
+
+def fig_to_json(fig):
+    return json.loads(pio.to_json(fig))
+
+
+def count_by_col(df, col, top=15):
+    if df is None or df.empty or col not in df.columns:
+        return pd.DataFrame(columns=[col, "QTDE"])
+
+    s = df[col].fillna("").astype(str).str.strip()
+    s = s[(s != "") & (s.str.lower() != "nan")]
+
+    if s.empty:
+        return pd.DataFrame(columns=[col, "QTDE"])
+
+    out = (
+        s.value_counts()
+        .head(top)
+        .rename_axis(col)
+        .reset_index(name="QTDE")
+    )
+    return out
+
+
+def grafico_barra_horizontal(df, col, titulo, top=15, cor="#E60000"):
+    base = count_by_col(df, col, top=top)
+
+    if base.empty:
+        return fig_vazia("Sem dados para " + titulo)
+
+    base = base.sort_values("QTDE", ascending=True)
+
+    fig = px.bar(
+        base,
+        x="QTDE",
+        y=col,
+        orientation="h",
+        text="QTDE",
+        color_discrete_sequence=[cor],
+    )
+    fig.update_traces(textposition="outside", cliponaxis=False)
+    fig.update_yaxes(title="")
+    fig.update_xaxes(title="Quantidade")
+    return estilo(fig, titulo=titulo)
+
+
+def grafico_barra_vertical(df, col, titulo, top=15, cor="#E60000"):
+    base = count_by_col(df, col, top=top)
+
+    if base.empty:
+        return fig_vazia("Sem dados para " + titulo)
+
+    fig = px.bar(
+        base,
+        x=col,
+        y="QTDE",
+        text="QTDE",
+        color_discrete_sequence=[cor],
+    )
+    fig.update_traces(textposition="outside", cliponaxis=False)
+    fig.update_xaxes(title="", tickangle=-25)
+    fig.update_yaxes(title="Quantidade")
+    return estilo(fig, titulo=titulo)
+
+
+def grafico_faixa_log(df):
+    col = "FAIXA_LOG"
+
+    if df is None or df.empty or col not in df.columns:
+        return fig_vazia("Sem dados de FAIXA_LOG")
+
+    base = count_by_col(df, col, top=20)
+
+    if base.empty:
+        return fig_vazia("Sem dados de FAIXA_LOG")
+
+    ordem = ["SEM LOG", "1x", "2-3x", "4-5x", "6x+"]
+    base["_ordem"] = base[col].apply(lambda x: ordem.index(x) if x in ordem else 99)
+    base = base.sort_values("_ordem").drop(columns=["_ordem"])
+
+    fig = px.bar(
+        base,
+        x=col,
+        y="QTDE",
+        text="QTDE",
+        color=col,
+        color_discrete_map=CORES_LOG,
+    )
+    fig.update_traces(textposition="outside", cliponaxis=False)
+    fig.update_xaxes(title="")
+    fig.update_yaxes(title="Quantidade")
+    return estilo(fig, titulo="Distribuição por Faixa LOG")
+
+
+def grafico_com_sem_log(df):
+    if df is None or df.empty or "FAIXA_LOG" not in df.columns:
+        return fig_vazia("Sem dados de LOG")
+
+    faixa = df["FAIXA_LOG"].fillna("").astype(str).str.strip()
+    sem_log = int((faixa == FAIXA_SEM_LOG).sum())
+    com_log = int(((faixa != "") & (faixa != FAIXA_SEM_LOG)).sum())
+
+    base = pd.DataFrame({
+        "STATUS": ["COM LOG", "SEM LOG"],
+        "QTDE": [com_log, sem_log],
+    })
+
+    if base["QTDE"].sum() == 0:
+        return fig_vazia("Sem dados de LOG")
+
+    fig = px.pie(
+        base,
+        names="STATUS",
+        values="QTDE",
+        hole=0.55,
+        color="STATUS",
+        color_discrete_map={
+            "COM LOG": CORES["orange"],
+            "SEM LOG": CORES["green"],
+        },
+    )
+    fig.update_traces(textinfo="percent+label")
+    return estilo(fig, titulo="Com LOG x Sem LOG")
+
+
+def grafico_tipo_por_log(df):
+    if df is None or df.empty:
+        return fig_vazia("Sem dados por tipo")
+
+    if "DS_TIPO_DESCONEXAO" not in df.columns or "FAIXA_LOG" not in df.columns:
+        return fig_vazia("Colunas de tipo/log não encontradas")
+
+    dff = df.copy()
+    dff["STATUS_LOG"] = dff["FAIXA_LOG"].apply(
+        lambda x: "SEM LOG" if str(x).strip() == FAIXA_SEM_LOG else "COM LOG"
+    )
+
+    base = (
+        dff.groupby(["DS_TIPO_DESCONEXAO", "STATUS_LOG"], observed=False)
+        .size()
+        .reset_index(name="QTDE")
+    )
+
+    base = base[
+        (base["DS_TIPO_DESCONEXAO"].astype(str).str.strip() != "")
+        & (base["QTDE"] > 0)
+    ]
+
+    if base.empty:
+        return fig_vazia("Sem dados por tipo")
+
+    totais = (
+        base.groupby("DS_TIPO_DESCONEXAO", observed=False)["QTDE"]
+        .sum()
+        .sort_values(ascending=False)
+        .head(12)
+        .index
+        .tolist()
+    )
+    base = base[base["DS_TIPO_DESCONEXAO"].isin(totais)]
+
+    fig = px.bar(
+        base,
+        x="DS_TIPO_DESCONEXAO",
+        y="QTDE",
+        color="STATUS_LOG",
+        barmode="stack",
+        text="QTDE",
+        color_discrete_map={
+            "COM LOG": CORES["orange"],
+            "SEM LOG": CORES["green"],
+        },
+    )
+    fig.update_traces(textposition="inside")
+    fig.update_xaxes(title="", tickangle=-25)
+    fig.update_yaxes(title="Quantidade")
+    return estilo(fig, titulo="LOG por Tipo de Desconexão")
+
+
+def grafico_cidades_criticas(df):
+    if df is None or df.empty:
+        return fig_vazia("Sem dados por cidade")
+
+    if "NM_CIDADE" not in df.columns or "FAIXA_LOG" not in df.columns:
+        return fig_vazia("Colunas de cidade/log não encontradas")
+
+    dff = df.copy()
+    dff["COM_LOG"] = dff["FAIXA_LOG"].apply(
+        lambda x: 1 if str(x).strip() not in ["", FAIXA_SEM_LOG] else 0
+    )
+
+    base = (
+        dff.groupby("NM_CIDADE", observed=False)["COM_LOG"]
+        .sum()
+        .sort_values(ascending=False)
+        .head(15)
+        .reset_index(name="QTDE_COM_LOG")
+    )
+
+    base = base[
+        (base["NM_CIDADE"].astype(str).str.strip() != "")
+        & (base["QTDE_COM_LOG"] > 0)
+    ]
+
+    if base.empty:
+        return fig_vazia("Sem cidades com LOG")
+
+    base = base.sort_values("QTDE_COM_LOG", ascending=True)
+
+    fig = px.bar(
+        base,
+        x="QTDE_COM_LOG",
+        y="NM_CIDADE",
+        orientation="h",
+        text="QTDE_COM_LOG",
+        color_discrete_sequence=[CORES["red"]],
+    )
+    fig.update_traces(textposition="outside", cliponaxis=False)
+    fig.update_yaxes(title="")
+    fig.update_xaxes(title="Quantidade com LOG")
+    return estilo(fig, titulo="Cidades com Maior Volume de LOG")
+
+
+def montar_kpis(df):
+    total = int(len(df)) if df is not None else 0
+
+    if df is None or df.empty or "FAIXA_LOG" not in df.columns:
+        return {
+            "total": total,
+            "com_log": 0,
+            "sem_log": 0,
+            "criticos": 0,
+            "pct_log": 0,
+        }
+
+    faixa = df["FAIXA_LOG"].fillna("").astype(str).str.strip()
+
+    sem_log = int((faixa == FAIXA_SEM_LOG).sum())
+    com_log = int(((faixa != "") & (faixa != FAIXA_SEM_LOG)).sum())
+    criticos = int((faixa == FAIXA_CRITICA).sum())
+    pct_log = round((com_log / total) * 100, 1) if total else 0
+
+    return {
+        "total": total,
+        "com_log": com_log,
+        "sem_log": sem_log,
+        "criticos": criticos,
+        "pct_log": pct_log,
+    }
+
+
+# ------------------------------------------------------------
+# Rotas
+# ------------------------------------------------------------
+
+@bp.route("/")
+def index():
+    return render_template("dash_log.html")
+
+
+@bp.route("/api/options")
+def api_options():
+    """
+    Opções em cascata:
+    - Recebe os filtros atuais pela query string.
+    - Para cada filtro, monta opções considerando os demais filtros.
+    - Retorna SEMPRE JSON.
+    """
+    try:
+        df = prepare_df()
+        selected = {col: request.args.getlist(col) for col in FILTROS_CASCATA}
+
+        payload = {}
+
+        for alvo in FILTROS_CASCATA:
+            dfx = df.copy()
+
+            for col, vals in selected.items():
+                if col == alvo:
+                    continue
+
+                vals = limpar_valores(vals)
+                if col in dfx.columns and vals:
+                    dfx = dfx[dfx[col].fillna("").astype(str).isin(vals)]
+
+            payload[alvo] = get_options(dfx, alvo)
+
+        return jsonify(payload)
+
+    except Exception as e:
+        return jsonify({
+            "error": True,
+            "endpoint": "/dash/log/api/options",
+            "message": str(e),
+        }), 500
+
+
+@bp.route("/api/data")
+def api_data():
+    """
+    Dados principais:
+    - Aplica filtros.
+    - Calcula KPIs.
+    - Monta 6 gráficos Plotly.
+    - Retorna SEMPRE JSON.
+    """
+    try:
+        df = prepare_df()
+        filters = {col: request.args.getlist(col) for col in FILTROS_CASCATA}
+        dff = apply_filters(df, filters)
+
+        kpis = montar_kpis(dff)
+
+        g1 = grafico_faixa_log(dff)
+        g2 = grafico_com_sem_log(dff)
+        g3 = grafico_barra_horizontal(
+            dff,
+            "ANL_MOTIVO_REAGENDA",
+            "Top Motivos de Reagenda",
+            top=15,
+            cor=CORES["orange"],
+        )
+        g4 = grafico_barra_horizontal(
+            dff,
+            "ANL_QUEBRA_RESPONSAVEL",
+            "Responsáveis pela Quebra",
+            top=15,
+            cor=CORES["red"],
+        )
+        g5 = grafico_tipo_por_log(dff)
+        g6 = grafico_cidades_criticas(dff)
+
+        payload = {
+            "kpis": kpis,
+            "g1": fig_to_json(g1),
+            "g2": fig_to_json(g2),
+            "g3": fig_to_json(g3),
+            "g4": fig_to_json(g4),
+            "g5": fig_to_json(g5),
+            "g6": fig_to_json(g6),
+        }
+
+        return jsonify(payload)
+
+    except Exception as e:
+        return jsonify({
+            "error": True,
+            "endpoint": "/dash/log/api/data",
+            "message": str(e),
+        }), 500

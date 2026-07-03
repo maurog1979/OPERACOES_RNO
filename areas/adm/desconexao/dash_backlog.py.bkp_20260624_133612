@@ -1,0 +1,344 @@
+# -*- coding: utf-8 -*-
+"""
+dash_backlog.py v2 — KPIs reais + FX_TEMPO derivada de BKL_TEMPO_ABERTURA_DIAS
+"""
+import json
+import traceback
+import pandas as pd
+import plotly.express as px
+import plotly.io as pio
+from flask import Blueprint, render_template, request, jsonify
+from data.db import load_table
+
+bp = Blueprint("dash_backlog", __name__,
+               url_prefix="/dash/backlog", template_folder="templates")
+
+CORES = {"red":"#E60000","red_dark":"#B71C1C","green":"#2E7D32",
+         "blue":"#1565C0","orange":"#F57C00","yellow":"#F9A825",
+         "gray":"#9E9E9E","purple":"#7B1FA2"}
+
+CORES_AGENDA = {
+    "CANCELADA":"#9E9E9E","COM QUEBRA":"#E60000",
+    "EXECUTADA":"#2E7D32","SEM ANALITICO":"#F9A825",
+}
+
+CATEGORICAL_COLS = ["SAFRA","DS_TIPO_DESCONEXAO","PENDENCIA","TEM_BACKLOG","FAIXA_LOG"]
+FILTER_FIELDS = ["ANO","MES","DIA","UF","NM_CIDADE","PARCEIRA_NOME",
+                 "SAFRA","DS_TIPO_DESCONEXAO","PENDENCIA"]
+
+_DF_CACHE = {"df": None, "diag": {}}
+
+def _derivar_faixa(dias):
+    """Cria FAIXA dinamica a partir de BKL_TEMPO_ABERTURA_DIAS."""
+    if pd.isna(dias):
+        return None
+    try:
+        d = float(dias)
+    except Exception:
+        return None
+    if d <= 7:   return "0-7d"
+    if d <= 15:  return "8-15d"
+    if d <= 30:  return "16-30d"
+    if d <= 60:  return "31-60d"
+    if d <= 90:  return "61-90d"
+    return "90d+"
+
+FAIXA_ORDEM = ["0-7d","8-15d","16-30d","31-60d","61-90d","90d+"]
+FAIXA_CORES = ["#2E7D32","#4CAF50","#F9A825","#F57C00","#E60000","#B71C1C"]
+
+def get_df():
+    if _DF_CACHE["df"] is not None:
+        return _DF_CACHE["df"]
+    try:
+        df = load_table("safra_enriquecida", categorical_cols=CATEGORICAL_COLS).copy()
+        if "BKL_DATA_AGENDAMENTO" in df.columns:
+            df["BKL_DATA_AGENDAMENTO"] = pd.to_datetime(df["BKL_DATA_AGENDAMENTO"], errors="coerce")
+            df["ANO"] = df["BKL_DATA_AGENDAMENTO"].dt.year.astype("Int64")
+            df["MES"] = df["BKL_DATA_AGENDAMENTO"].dt.month.astype("Int64")
+            df["DIA"] = df["BKL_DATA_AGENDAMENTO"].dt.day.astype("Int64")
+        # Derivar FAIXA dinamica com fallback em cascata
+        AGING_CANDIDATES = [
+            "BKL_TEMPO_ABERTURA_DIAS",
+            "BKL_AGING",
+            "NR_DIAS_EM_ABERTO",
+            "NR_AGING_OS",
+            "BKL_DIAS_AGENDAMENTO",
+        ]
+        aging_col_usada = None
+        aging_diag = {}
+        for col in AGING_CANDIDATES:
+            if col not in df.columns:
+                aging_diag[col] = "ausente"
+                continue
+            s = pd.to_numeric(df[col], errors="coerce")
+            nao_nulos = int(s.notna().sum())
+            aging_diag[col] = {
+                "nao_nulos": nao_nulos,
+                "min": float(s.min()) if nao_nulos else None,
+                "max": float(s.max()) if nao_nulos else None,
+                "media": round(float(s.mean()), 2) if nao_nulos else None,
+            }
+            if nao_nulos > 100 and aging_col_usada is None:
+                aging_col_usada = col
+                df["_AGING_NUM"] = s
+                df["FAIXA_AGING"] = s.apply(_derivar_faixa)
+        if aging_col_usada is None:
+            df["FAIXA_AGING"] = None
+            df["_AGING_NUM"] = pd.NA
+        _DF_CACHE["df"] = df
+        _DF_CACHE["diag"] = {
+            "rows": len(df), "cols": len(df.columns),
+            "mem_mb": round(df.memory_usage(deep=True).sum()/1024**2, 1),
+            "faixa_aging_counts": df["FAIXA_AGING"].astype(str).value_counts().head(10).to_dict(),
+            "aging_col_usada": aging_col_usada,
+            "aging_diag": aging_diag,
+        }
+        print(f"[BACKLOG v3] {len(df):,} linhas | {_DF_CACHE['diag']['mem_mb']} MB | aging_col={aging_col_usada}")
+        return df
+    except Exception as e:
+        _DF_CACHE["diag"] = {"error": str(e), "traceback": traceback.format_exc()}
+        print(f"[BACKLOG] ERRO: {e}")
+        return pd.DataFrame()
+
+def parse_multi(v):
+    if not v: return []
+    return [x for x in v.split("||") if x]
+
+def safe_unique(s):
+    try:
+        vals = s.dropna().astype(str).unique().tolist()
+        vals = [v for v in vals if v and v.lower() not in ("nan","none","<na>")]
+        try: return sorted(vals, key=lambda x: float(x))
+        except: return sorted(vals)
+    except: return []
+
+def fig_to_json(fig): return json.loads(pio.to_json(fig))
+
+def estilo(fig, titulo="", h=350):
+    fig.update_layout(
+        title=dict(text=titulo, font=dict(size=14, color="#333"), x=0.01),
+        template="plotly_white", height=h,
+        margin=dict(l=20, r=20, t=50, b=20),
+        plot_bgcolor="white", paper_bgcolor="white",
+        font=dict(family="Segoe UI", size=11),
+        legend=dict(font_size=10, orientation="h",
+                    yanchor="bottom", y=-0.25, x=0.5, xanchor="center"),
+    )
+    return fig
+
+def fig_vazia(msg="Sem dados"):
+    import plotly.graph_objects as go
+    f = go.Figure()
+    f.add_annotation(text=msg, showarrow=False, font_size=14, font_color="#999")
+    f.update_layout(template="plotly_white", height=350,
+                    margin=dict(l=20,r=20,t=40,b=20),
+                    plot_bgcolor="white", paper_bgcolor="white")
+    return f
+
+def clean_str(df, col):
+    if col not in df.columns: return df.iloc[0:0]
+    s = df[col].astype(str).str.strip()
+    mask = s.notna() & (s != "") & (~s.str.lower().isin(["nan","none","<na>"]))
+    out = df[mask].copy()
+    out[col] = out[col].astype(str)
+    return out
+
+@bp.route("/")
+def index():
+    return render_template("dash_backlog.html")
+
+@bp.route("/api/debug")
+def api_debug():
+    try:
+        df = get_df()
+        info = dict(_DF_CACHE.get("diag", {}))
+        info["total_rows"] = len(df)
+        info["all_cols"] = list(df.columns) if not df.empty else []
+        if not df.empty:
+            for c in ["SITUACAO_AGENDA","TEM_BACKLOG","FAIXA_AGING"]:
+                if c in df.columns:
+                    s = df[c].astype(str).str.strip()
+                    info[f"{c.lower()}_counts"] = s.value_counts().head(10).to_dict()
+        return jsonify(info)
+    except Exception as e:
+        return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
+
+@bp.route("/api/refresh")
+def api_refresh():
+    try:
+        df_full = get_df()
+        if df_full is None or df_full.empty:
+            return jsonify({"empty": True, "options": {f: [] for f in FILTER_FIELDS},
+                            "error": _DF_CACHE.get("diag", {}).get("error")})
+
+        f = {fld: parse_multi(request.args.get(fld, "")) for fld in FILTER_FIELDS}
+        df = df_full.copy()
+        opts = {}
+
+        opts["ANO"] = safe_unique(df_full["ANO"]) if "ANO" in df_full.columns else []
+        if f["ANO"]: df = df[df["ANO"].astype(str).isin(f["ANO"])]
+        opts["MES"] = safe_unique(df["MES"]) if "MES" in df.columns else []
+        if f["MES"]: df = df[df["MES"].astype(str).isin(f["MES"])]
+        opts["DIA"] = safe_unique(df["DIA"]) if "DIA" in df.columns else []
+        if f["DIA"]: df = df[df["DIA"].astype(str).isin(f["DIA"])]
+        opts["UF"] = safe_unique(df_full["UF"]) if "UF" in df_full.columns else []
+        if f["UF"]: df = df[df["UF"].astype(str).isin(f["UF"])]
+        opts["NM_CIDADE"] = safe_unique(df["NM_CIDADE"]) if "NM_CIDADE" in df.columns else []
+        if f["NM_CIDADE"]: df = df[df["NM_CIDADE"].astype(str).isin(f["NM_CIDADE"])]
+        opts["PARCEIRA_NOME"] = safe_unique(df_full["PARCEIRA_NOME"]) if "PARCEIRA_NOME" in df_full.columns else []
+        if f["PARCEIRA_NOME"]: df = df[df["PARCEIRA_NOME"].astype(str).isin(f["PARCEIRA_NOME"])]
+        opts["SAFRA"] = safe_unique(df_full["SAFRA"]) if "SAFRA" in df_full.columns else []
+        if f["SAFRA"]: df = df[df["SAFRA"].astype(str).isin(f["SAFRA"])]
+        opts["DS_TIPO_DESCONEXAO"] = safe_unique(df_full["DS_TIPO_DESCONEXAO"]) if "DS_TIPO_DESCONEXAO" in df_full.columns else []
+        if f["DS_TIPO_DESCONEXAO"]: df = df[df["DS_TIPO_DESCONEXAO"].astype(str).isin(f["DS_TIPO_DESCONEXAO"])]
+        opts["PENDENCIA"] = safe_unique(df_full["PENDENCIA"]) if "PENDENCIA" in df_full.columns else []
+        if f["PENDENCIA"]: df = df[df["PENDENCIA"].astype(str).isin(f["PENDENCIA"])]
+
+        # ===== KPIs (valores REAIS) =====
+        def cnt(col, val):
+            if col in df.columns:
+                return int((df[col].astype(str) == val).sum())
+            return 0
+        kpis = {
+            "no_backlog":    cnt("TEM_BACKLOG", "SIM"),
+            "executadas":    cnt("SITUACAO_AGENDA", "EXECUTADA"),
+            "com_quebra":    cnt("SITUACAO_AGENDA", "COM QUEBRA"),
+            "sem_analitico": cnt("SITUACAO_AGENDA", "SEM ANALITICO"),
+        }
+
+        if df.empty:
+            vz = fig_to_json(fig_vazia())
+            return jsonify({"empty": True, "options": opts, "kpis": kpis,
+                            "figs": {f"g{i}": vz for i in range(1,7)}})
+
+        figs = {}
+
+        # G1: Situacao de Agenda (todos os PENDENTES)
+        try:
+            d = df.copy()
+            if "PENDENCIA" in d.columns:
+                d = d[d["PENDENCIA"].astype(str) == "PENDENTE"]
+            d = clean_str(d, "SITUACAO_AGENDA")
+            if not d.empty:
+                g = d.groupby("SITUACAO_AGENDA", observed=True).size().reset_index(name="QTD")
+                g = g[g["QTD"] > 0].sort_values("QTD", ascending=True)
+                tot = g["QTD"].sum()
+                g["PCT"] = (g["QTD"] / tot * 100).round(1) if tot else 0
+                g["LABEL"] = g.apply(lambda r: f"{int(r.QTD):,} ({r.PCT:.1f}%)".replace(",", "."), axis=1)
+                fig = px.bar(g, x="QTD", y="SITUACAO_AGENDA", orientation="h",
+                             color="SITUACAO_AGENDA", color_discrete_map=CORES_AGENDA, text="LABEL")
+                fig.update_traces(textposition="outside", textfont_size=11)
+                fig.update_layout(showlegend=False)
+                figs["g1"] = fig_to_json(estilo(fig, "Situacao de Agenda (Pendentes)", 380))
+            else:
+                figs["g1"] = fig_to_json(fig_vazia())
+        except Exception as e:
+            figs["g1"] = fig_to_json(fig_vazia(f"Erro G1: {e}"))
+
+        # G2: Backlog por Cidade (Top 20)
+        try:
+            d = df.copy()
+            if "TEM_BACKLOG" in d.columns:
+                d = d[d["TEM_BACKLOG"].astype(str) == "SIM"]
+            d = clean_str(d, "NM_CIDADE")
+            if not d.empty:
+                g = d.groupby("NM_CIDADE", observed=True).size().reset_index(name="QTD")
+                g = g[g["QTD"] > 0].sort_values("QTD", ascending=True).tail(20)
+                g["LABEL"] = g["QTD"].apply(lambda x: f"{int(x):,}".replace(",", "."))
+                fig = px.bar(g, x="QTD", y="NM_CIDADE", orientation="h",
+                             text="LABEL", color_discrete_sequence=[CORES["blue"]])
+                fig.update_traces(textposition="outside", textfont_size=11)
+                figs["g2"] = fig_to_json(estilo(fig, "Backlog por Cidade (Top 20)", 440))
+            else:
+                figs["g2"] = fig_to_json(fig_vazia())
+        except Exception as e:
+            figs["g2"] = fig_to_json(fig_vazia(f"Erro G2: {e}"))
+
+        # G3: Aging - FAIXA derivada
+        try:
+            d = df.copy()
+            if "TEM_BACKLOG" in d.columns:
+                d = d[d["TEM_BACKLOG"].astype(str) == "SIM"]
+            d = clean_str(d, "FAIXA_AGING")
+            if not d.empty:
+                g = d.groupby("FAIXA_AGING", observed=True).size().reset_index(name="QTD")
+                g["ORDEM"] = g["FAIXA_AGING"].apply(lambda x: FAIXA_ORDEM.index(x) if x in FAIXA_ORDEM else 99)
+                g = g.sort_values("ORDEM")
+                g["LABEL"] = g["QTD"].apply(lambda x: f"{int(x):,}".replace(",", "."))
+                fig = px.bar(g, x="FAIXA_AGING", y="QTD", text="LABEL",
+                             color="FAIXA_AGING",
+                             color_discrete_sequence=FAIXA_CORES,
+                             category_orders={"FAIXA_AGING": FAIXA_ORDEM})
+                fig.update_traces(textposition="outside", textfont_size=11)
+                fig.update_layout(showlegend=False)
+                figs["g3"] = fig_to_json(estilo(fig, "Aging por Faixa de Tempo (dias em aberto)", 380))
+            else:
+                figs["g3"] = fig_to_json(fig_vazia("Sem dados de BKL_TEMPO_ABERTURA_DIAS"))
+        except Exception as e:
+            figs["g3"] = fig_to_json(fig_vazia(f"Erro G3: {e}"))
+
+        # G4: Top 10 Motivos Reagendamento
+        try:
+            d = clean_str(df, "BKL_MOTIVO_REAG")
+            if not d.empty:
+                g = d.groupby("BKL_MOTIVO_REAG", observed=True).size().reset_index(name="QTD")
+                g = g[g["QTD"] > 0].nlargest(10, "QTD").sort_values("QTD", ascending=True)
+                g["LABEL"] = g["QTD"].apply(lambda x: f"{int(x):,}".replace(",", "."))
+                fig = px.bar(g, x="QTD", y="BKL_MOTIVO_REAG", orientation="h",
+                             text="LABEL", color_discrete_sequence=[CORES["orange"]])
+                fig.update_traces(textposition="outside", textfont_size=11)
+                figs["g4"] = fig_to_json(estilo(fig, "Top 10 Motivos de Reagendamento", 440))
+            else:
+                figs["g4"] = fig_to_json(fig_vazia())
+        except Exception as e:
+            figs["g4"] = fig_to_json(fig_vazia(f"Erro G4: {e}"))
+
+        # G5: SAFRA x Tipo
+        try:
+            d = df.copy()
+            if "TEM_BACKLOG" in d.columns:
+                d = d[d["TEM_BACKLOG"].astype(str) == "SIM"]
+            if "SAFRA" in d.columns and "DS_TIPO_DESCONEXAO" in d.columns:
+                d["SAFRA"] = d["SAFRA"].astype(str)
+                d["DS_TIPO_DESCONEXAO"] = d["DS_TIPO_DESCONEXAO"].astype(str)
+                d = d[(d["SAFRA"] != "nan") & (d["DS_TIPO_DESCONEXAO"] != "nan")]
+                g = d.groupby(["SAFRA","DS_TIPO_DESCONEXAO"], observed=True).size().reset_index(name="QTD")
+                g = g[g["QTD"] > 0]
+                if not g.empty:
+                    g["LABEL"] = g["QTD"].apply(lambda x: f"{int(x):,}".replace(",", "."))
+                    cm = {v: (CORES["blue"] if "OP" in str(v).upper() else CORES["orange"])
+                          for v in g["DS_TIPO_DESCONEXAO"].unique()}
+                    fig = px.bar(g, x="SAFRA", y="QTD", color="DS_TIPO_DESCONEXAO",
+                                 barmode="group", text="LABEL", color_discrete_map=cm)
+                    fig.update_traces(textposition="outside", textfont_size=10)
+                    figs["g5"] = fig_to_json(estilo(fig, "Backlog: SAFRA x Tipo Desconexao", 380))
+                else:
+                    figs["g5"] = fig_to_json(fig_vazia())
+            else:
+                figs["g5"] = fig_to_json(fig_vazia())
+        except Exception as e:
+            figs["g5"] = fig_to_json(fig_vazia(f"Erro G5: {e}"))
+
+        # G6: Backlog por Tecnologia
+        try:
+            d = df.copy()
+            if "TEM_BACKLOG" in d.columns:
+                d = d[d["TEM_BACKLOG"].astype(str) == "SIM"]
+            d = clean_str(d, "BKL_TECNOLOGIA")
+            if not d.empty:
+                g = d.groupby("BKL_TECNOLOGIA", observed=True).size().reset_index(name="QTD")
+                g = g[g["QTD"] > 0].sort_values("QTD", ascending=True)
+                g["LABEL"] = g["QTD"].apply(lambda x: f"{int(x):,}".replace(",", "."))
+                fig = px.bar(g, x="QTD", y="BKL_TECNOLOGIA", orientation="h",
+                             text="LABEL", color_discrete_sequence=[CORES["green"]])
+                fig.update_traces(textposition="outside", textfont_size=11)
+                figs["g6"] = fig_to_json(estilo(fig, "Backlog por Tecnologia", 380))
+            else:
+                figs["g6"] = fig_to_json(fig_vazia())
+        except Exception as e:
+            figs["g6"] = fig_to_json(fig_vazia(f"Erro G6: {e}"))
+
+        return jsonify({"empty": False, "total": len(df),
+                        "options": opts, "kpis": kpis, "figs": figs})
+    except Exception as e:
+        return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500

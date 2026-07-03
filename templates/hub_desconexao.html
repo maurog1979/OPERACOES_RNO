@@ -1,0 +1,471 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<style>
+    :root {
+        --claro-red: #E60000;
+        --claro-red-dark: #B71C1C;
+        --bg: #F5F6FA;
+        --card: #FFFFFF;
+        --text: #111827;
+        --muted: #6B7280;
+        --line: #E5E7EB;
+        --shadow: 0 18px 42px rgba(15, 23, 42, 0.10);
+        --radius: 24px;
+    }
+
+    body {
+        background: var(--bg) !important;
+    }
+
+    .hub-page {
+        min-height: 100vh;
+        padding: 22px;
+        background:
+            radial-gradient(circle at top left, rgba(230,0,0,0.10), transparent 32%),
+            radial-gradient(circle at bottom right, rgba(21,101,192,0.08), transparent 36%),
+            var(--bg);
+        font-family: Inter, "Segoe UI", Arial, sans-serif;
+    }
+
+    .hub-hero {
+        border-radius: 26px;
+        padding: 22px 24px;
+        margin-bottom: 18px;
+        color: #FFFFFF;
+        background: linear-gradient(120deg, #E60000 0%, #B71C1C 55%, #7F1111 100%);
+        box-shadow: var(--shadow);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+    }
+
+    .hub-title-wrap {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+    }
+
+    .hub-logo {
+        width: 58px;
+        height: 58px;
+        border-radius: 18px;
+        background: rgba(255,255,255,0.16);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.35rem;
+        font-weight: 950;
+        letter-spacing: -0.04em;
+    }
+
+    .hub-title {
+        margin: 0;
+        font-size: 1.62rem;
+        font-weight: 950;
+        letter-spacing: -0.035em;
+    }
+
+    .hub-subtitle {
+        margin: 4px 0 0;
+        opacity: 0.90;
+        font-size: 0.94rem;
+        font-weight: 650;
+    }
+
+    .hub-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    .hub-btn {
+        color: #FFFFFF !important;
+        text-decoration: none !important;
+        border: 1px solid rgba(255,255,255,0.30);
+        background: rgba(255,255,255,0.13);
+        padding: 9px 14px;
+        border-radius: 999px;
+        font-size: 0.87rem;
+        font-weight: 850;
+        transition: 0.18s ease;
+    }
+
+    .hub-btn:hover {
+        background: rgba(255,255,255,0.24);
+        transform: translateY(-1px);
+    }
+
+    .hub-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(245px, 1fr));
+        gap: 16px;
+    }
+
+    .hub-card {
+        position: relative;
+        display: block;
+        min-height: 198px;
+        padding: 24px;
+        border-radius: var(--radius);
+        background: rgba(255,255,255,0.96);
+        border: 1px solid rgba(229,231,235,0.90);
+        box-shadow: 0 10px 28px rgba(15,23,42,0.07);
+        text-decoration: none !important;
+        overflow: hidden;
+        transition: 0.20s ease;
+        color: var(--text);
+    }
+
+    .hub-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 18px 42px rgba(15,23,42,0.14);
+        border-color: rgba(230,0,0,0.25);
+    }
+
+    .hub-card::after {
+        content: "";
+        position: absolute;
+        right: -42px;
+        top: -42px;
+        width: 120px;
+        height: 120px;
+        border-radius: 999px;
+        background: rgba(230,0,0,0.06);
+    }
+
+    .hub-icon {
+        width: 64px;
+        height: 64px;
+        border-radius: 22px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #FFFFFF;
+        font-size: 1.45rem;
+        font-weight: 950;
+        margin-bottom: 16px;
+        box-shadow: 0 12px 22px rgba(15,23,42,0.14);
+    }
+
+    .ico-exec { background: linear-gradient(135deg, #E60000, #B71C1C); }
+    .ico-backlog { background: linear-gradient(135deg, #1565C0, #0D47A1); }
+    .ico-quebra { background: linear-gradient(135deg, #F57C00, #C2410C); }
+    .ico-log { background: linear-gradient(135deg, #7B1FA2, #4A148C); }
+    .ico-parc { background: linear-gradient(135deg, #2E7D32, #14532D); }
+    .ico-ret { background: linear-gradient(135deg, #16A34A, #15803D); }
+
+    .hub-card-title {
+        margin: 0 0 7px;
+        font-size: 1.15rem;
+        line-height: 1.16;
+        font-weight: 950;
+        letter-spacing: -0.025em;
+        color: #111827;
+    }
+
+    .hub-card-desc {
+        margin: 0;
+        min-height: 42px;
+        color: #6B7280;
+        font-weight: 700;
+        line-height: 1.28;
+        font-size: 0.91rem;
+    }
+
+    .hub-card-footer {
+        margin-top: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+    }
+
+    .hub-status {
+        color: #15803D;
+        font-weight: 900;
+        font-size: 0.86rem;
+    }
+
+    .hub-pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 96px;
+        border-radius: 999px;
+        padding: 9px 14px;
+        background: linear-gradient(135deg, #E60000, #B71C1C);
+        color: #FFFFFF;
+        font-weight: 950;
+        font-size: 0.82rem;
+        box-shadow: 0 10px 18px rgba(230,0,0,0.22);
+    }
+
+    .hub-note {
+        margin-top: 16px;
+        color: #6B7280;
+        font-size: 0.78rem;
+        text-align: right;
+        font-weight: 650;
+    }
+
+    @media (max-width: 1180px) {
+        .hub-grid {
+            grid-template-columns: repeat(2, minmax(245px, 1fr));
+        }
+    }
+
+    @media (max-width: 760px) {
+        .hub-page {
+            padding: 14px;
+        }
+
+        .hub-hero {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .hub-actions {
+            justify-content: flex-start;
+        }
+
+        .hub-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+/* AJUSTE_HUB_RNO_POS_RETIRADA_COMPACTO_ICONES */
+
+/* Compactacao para notebook padrao */
+.rno-topbar,
+.hub-hero {
+    min-height: 112px !important;
+    height: 112px !important;
+    padding-top: 12px !important;
+    padding-bottom: 12px !important;
+}
+
+.claro-logo-box,
+.hub-logo {
+    width: 86px !important;
+    height: 86px !important;
+    border-radius: 20px !important;
+    font-size: 1.70rem !important;
+}
+
+.rno-main-title,
+.hub-title {
+    font-size: 1.30rem !important;
+}
+
+.rno-sub-title,
+.hub-subtitle {
+    font-size: 0.76rem !important;
+}
+
+.rno-content,
+.hub-page {
+    padding: 18px 22px 22px !important;
+}
+
+/* Mantem o layout atual em 3 colunas, mais compacto */
+.hub-grid,
+.hub-grid-old {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(280px, 1fr)) !important;
+    gap: 16px !important;
+}
+
+.hub-card,
+.hub-card-old {
+    min-height: 202px !important;
+    padding: 20px 24px 18px !important;
+    border-radius: 22px !important;
+}
+
+.hub-icon,
+.hub-icon-old {
+    width: 64px !important;
+    height: 64px !important;
+    border-radius: 18px !important;
+    font-size: 1.48rem !important;
+    line-height: 1 !important;
+    letter-spacing: 0 !important;
+}
+
+.hub-card-title,
+.hub-card-title-old {
+    font-size: 1.14rem !important;
+    line-height: 1.12 !important;
+}
+
+.hub-card-desc,
+.hub-card-desc-old {
+    font-size: 0.88rem !important;
+    line-height: 1.20 !important;
+    min-height: 38px !important;
+}
+
+.hub-card-footer,
+.hub-card-footer-old {
+    margin-top: 12px !important;
+}
+
+.hub-pill,
+.hub-pill-old {
+    min-width: 98px !important;
+    height: 33px !important;
+    padding: 0 15px !important;
+    border-radius: 999px !important;
+    background: linear-gradient(145deg, #E30613, #C70000) !important;
+    color: #FFFFFF !important;
+    font-size: 0.77rem !important;
+    font-weight: 950 !important;
+    box-shadow: 0 10px 20px rgba(227, 6, 19, 0.20) !important;
+}
+
+.hub-status,
+.hub-status-old {
+    color: #10883E !important;
+    font-weight: 900 !important;
+}
+
+/* Paleta dos icones no lugar da numeracao */
+.ico-exec,
+.icon-exec {
+    background: linear-gradient(145deg, #E30613, #D00000) !important;
+}
+
+.ico-backlog,
+.icon-backlog {
+    background: linear-gradient(145deg, #70B7ED, #2778D6) !important;
+}
+
+.ico-quebra,
+.icon-quebra {
+    background: linear-gradient(145deg, #FFB44D, #FF8500) !important;
+}
+
+.ico-log,
+.icon-log {
+    background: linear-gradient(145deg, #8D35C6, #7627B9) !important;
+}
+
+.ico-parc,
+.icon-parceiras {
+    background: linear-gradient(145deg, #E94D87, #D52B72) !important;
+}
+
+.ico-ret,
+.icon-retirada {
+    background: linear-gradient(145deg, #A7DBB3, #7FBF91) !important;
+    color: #6B7280 !important;
+}
+
+@media (max-width: 1180px) {
+    .hub-grid,
+    .hub-grid-old {
+        grid-template-columns: repeat(2, minmax(260px, 1fr)) !important;
+    }
+}
+
+@media (max-width: 760px) {
+    .rno-topbar,
+    .hub-hero {
+        height: auto !important;
+        min-height: 112px !important;
+    }
+
+    .hub-grid,
+    .hub-grid-old {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+</style>
+
+<div class="hub-page">
+    <section class="hub-hero">
+        <div class="hub-title-wrap">
+            <div class="hub-logo">RNO</div>
+            <div>
+                <h1 class="hub-title">ADM · Desconexão</h1>
+                <p class="hub-subtitle">Hub executivo dos dashboards operacionais de Desconexão da Regional Norte.</p>
+            </div>
+        </div>
+
+        <div class="hub-actions">
+            <a class="hub-btn" href="/dash/retirada/">← Voltar ADM</a>
+            <a class="hub-btn" href="/">Página inicial</a>
+        </div>
+    </section>
+
+    <section class="hub-grid">
+        <a class="hub-card" href="/dash/executivo/">
+            <div class="hub-icon ico-exec">★</div>
+            <h2 class="hub-card-title">Executivo</h2>
+            <p class="hub-card-desc">Visão consolidada dos principais indicadores da operação.</p>
+            <div class="hub-card-footer">
+                <span class="hub-status">Disponível</span>
+                <span class="hub-pill">ACESSAR</span>
+            </div>
+        </a>
+
+        <a class="hub-card" href="/dash/backlog/">
+            <div class="hub-icon ico-backlog">☑</div>
+            <h2 class="hub-card-title">Backlog</h2>
+            <p class="hub-card-desc">Acompanhamento de pendências, situação de agenda e volume de OS.</p>
+            <div class="hub-card-footer">
+                <span class="hub-status">Disponível</span>
+                <span class="hub-pill">ACESSAR</span>
+            </div>
+        </a>
+
+        <a class="hub-card" href="/dash/quebra/">
+            <div class="hub-icon ico-quebra">▣</div>
+            <h2 class="hub-card-title">Quebra de Agenda</h2>
+            <p class="hub-card-desc">Análise de quebras por cidade, parceira, data e representatividade.</p>
+            <div class="hub-card-footer">
+                <span class="hub-status">Disponível</span>
+                <span class="hub-pill">ACESSAR</span>
+            </div>
+        </a>
+
+        <a class="hub-card" href="/dash/log/">
+            <div class="hub-icon ico-log">↻</div>
+            <h2 class="hub-card-title">Log e Reincidência</h2>
+            <p class="hub-card-desc">Monitoramento de contratos críticos, logs e faixas de reincidência.</p>
+            <div class="hub-card-footer">
+                <span class="hub-status">Disponível</span>
+                <span class="hub-pill">ACESSAR</span>
+            </div>
+        </a>
+
+        <a class="hub-card" href="/dash/parceiras/">
+            <div class="hub-icon ico-parc">◆</div>
+            <h2 class="hub-card-title">Parceiras</h2>
+            <p class="hub-card-desc">Ranking e análise de recuperação por parceira operacional.</p>
+            <div class="hub-card-footer">
+                <span class="hub-status">Disponível</span>
+                <span class="hub-pill">ACESSAR</span>
+            </div>
+        </a>
+
+        <a class="hub-card" href="/dash/retirada/">
+            <div class="hub-icon ico-ret">▥</div>
+            <h2 class="hub-card-title">Retirada de Equipamentos</h2>
+            <p class="hub-card-desc">Performance TOA, status de baixa, safra, cidade e parceira.</p>
+            <div class="hub-card-footer">
+                <span class="hub-status">Disponível</span>
+                <span class="hub-pill">ACESSAR</span>
+            </div>
+        </a>
+    </section>
+
+    <div class="hub-note">Portal Operações RNO · ADM · Desconexão</div>
+</div>
+
+{% endblock %}

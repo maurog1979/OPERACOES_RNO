@@ -1,0 +1,507 @@
+# -*- coding: utf-8 -*-
+"""
+CORRECAO CONSOLIDADA - HUB + DASHBOARDS DESCONEXAO
+Portal Operacoes RNO / FASE 2B
+
+Objetivo:
+1. Manter o layout atual do Hub numerado, mas ajustar:
+   - tamanho para notebook padrao
+   - icones no lugar dos numeros 01/02/03/04/05/06
+   - Retirada ativo em /dash/retirada/
+2. Remover patches JS antigos que podem interferir no Hub/dashboards.
+3. Corrigir compatibilidade do data/db.py:
+   - adiciona _DF_CACHE = {}
+   - adiciona _OPTIONS_CACHE = {}
+4. Gerar relatorio final.
+
+Uso:
+cd "C:\\Users\\n5996917\\OneDrive - Claro SA\\INTRANET\\OPERACOES_RNO"
+python corrigir_hub_e_erros_pos_retirada.py
+"""
+
+from pathlib import Path
+from datetime import datetime
+import shutil
+import re
+
+
+ROOT = Path(__file__).resolve().parent
+TEMPLATES = ROOT / "templates"
+
+BASE_FILE = TEMPLATES / "base.html"
+HUB_FILE = TEMPLATES / "hub_desconexao.html"
+DB_FILE = ROOT / "data" / "db.py"
+
+RELATORIO = ROOT / "relatorio_correcao_hub_e_erros_pos_retirada.txt"
+
+
+PATCH_MARKERS = [
+    "PATCH_V4_RETIRADA_ATIVA",
+    "PATCH LIMPO RETIRADA ATIVA",
+    "PATCH DIRETO CARD RETIRADA ORIGEM REAL",
+    "HUB RETIRADA ATIVA V3 GLOBAL",
+    "ATIVACAO SEGURA CARD RETIRADA V2",
+]
+
+
+def agora():
+    return datetime.now().strftime("%Y%m%d_%H%M%S")
+
+
+def backup_file(path):
+    if path.exists():
+        backup = path.with_suffix(path.suffix + ".bak_correcao_pos_retirada_" + agora())
+        shutil.copy2(path, backup)
+        print(f"[BACKUP] {path.name} -> {backup.name}")
+        return backup
+    return None
+
+
+def read_text_safe(path):
+    try:
+        return path.read_text(encoding="utf-8"), "utf-8"
+    except UnicodeDecodeError:
+        return path.read_text(encoding="latin-1"), "latin-1"
+
+
+def write_text_safe(path, text, encoding="utf-8"):
+    path.write_text(text, encoding=encoding)
+
+
+def remover_bloco_com_marker(html, marker):
+    """
+    Remove blocos style/script que contenham patches antigos.
+    """
+    mudou = True
+
+    while mudou:
+        mudou = False
+        idx = html.find(marker)
+
+        if idx == -1:
+            break
+
+        style_ini = html.rfind("<style", 0, idx)
+        script_ini = html.rfind("<script", 0, idx)
+
+        candidatos_ini = [x for x in [style_ini, script_ini] if x != -1]
+        ini = max(candidatos_ini) if candidatos_ini else idx
+
+        style_fim = html.find("</style>", idx)
+        script_fim = html.find("</script>", idx)
+
+        candidatos_fim = []
+
+        if style_fim != -1:
+            candidatos_fim.append(style_fim + len("</style>"))
+
+        if script_fim != -1:
+            candidatos_fim.append(script_fim + len("</script>"))
+
+        fim = min(candidatos_fim) if candidatos_fim else idx + len(marker)
+
+        html = html[:ini].rstrip() + "\n" + html[fim:].lstrip()
+        mudou = True
+
+    return html
+
+
+def limpar_patches_antigos(path):
+    if not path.exists():
+        return False
+
+    html, encoding = read_text_safe(path)
+    original = html
+
+    for marker in PATCH_MARKERS:
+        html = remover_bloco_com_marker(html, marker)
+
+    if html != original:
+        backup_file(path)
+        write_text_safe(path, html, encoding)
+        print(f"[LIMPO] Patches antigos removidos de: {path.name}")
+        return True
+
+    print(f"[INFO] Sem patches antigos detectados em: {path.name}")
+    return False
+
+
+def corrigir_data_db_cache():
+    """
+    Corrige o erro:
+    ImportError: cannot import name '_DF_CACHE' from 'data.db'
+    """
+    if not DB_FILE.exists():
+        print(f"[AVISO] data/db.py nao encontrado: {DB_FILE}")
+        return False
+
+    txt, encoding = read_text_safe(DB_FILE)
+    original = txt
+
+    inserts = []
+
+    if re.search(r"^\s*_DF_CACHE\s*=", txt, flags=re.MULTILINE) is None:
+        inserts.append("_DF_CACHE = {}")
+
+    if re.search(r"^\s*_OPTIONS_CACHE\s*=", txt, flags=re.MULTILINE) is None:
+        inserts.append("_OPTIONS_CACHE = {}")
+
+    if not inserts:
+        print("[INFO] data/db.py ja possui _DF_CACHE/_OPTIONS_CACHE.")
+        return False
+
+    bloco = (
+        "\n# Compatibilidade com dashboards legados/migrados\n"
+        + "\n".join(inserts)
+        + "\n"
+    )
+
+    linhas = txt.splitlines(keepends=True)
+    idx = 0
+
+    for i, line in enumerate(linhas):
+        stripped = line.strip()
+
+        if (
+            stripped.startswith("import ")
+            or stripped.startswith("from ")
+            or stripped == ""
+            or stripped.startswith("#")
+        ):
+            idx = i + 1
+            continue
+
+        break
+
+    txt = "".join(linhas[:idx]) + bloco + "".join(linhas[idx:])
+
+    if txt != original:
+        backup_file(DB_FILE)
+        write_text_safe(DB_FILE, txt, encoding)
+        print("[OK] data/db.py corrigido com variaveis de cache.")
+        return True
+
+    return False
+
+
+def ajustar_hub_atual():
+    """
+    Mantem o layout atual do Hub, mas:
+    - troca numeros por icones
+    - compacta altura
+    - garante Retirada ativo
+    """
+    if not HUB_FILE.exists():
+        print(f"[AVISO] hub_desconexao.html nao encontrado: {HUB_FILE}")
+        return False
+
+    html, encoding = read_text_safe(HUB_FILE)
+    original = html
+
+    # Troca numeros por icones/simbolos do layout anterior.
+    trocas_icones = {
+        ">01<": ">★<",
+        ">02<": ">☑<",
+        ">03<": ">▣<",
+        ">04<": ">↻<",
+        ">05<": ">◆<",
+        ">06<": ">▥<",
+    }
+
+    for antigo, novo in trocas_icones.items():
+        html = html.replace(antigo, novo)
+
+    # Mantem Retirada ativo.
+    html = html.replace("Em desenvolvimento", "Disponível")
+    html = html.replace("EM DESENVOLVIMENTO", "DISPONÍVEL")
+    html = html.replace("EM BREVE", "ACESSAR")
+    html = html.replace("Em breve", "ACESSAR")
+    html = html.replace("em breve", "ACESSAR")
+
+    # Garante que qualquer placeholder de link perto da Retirada vire a rota correta.
+    padrao_retirada = r'(<a[^>]*href=")[^"]*("[^>]*>[\s\S]*?Retirada de Equipamentos)'
+    html = re.sub(
+        padrao_retirada,
+        r'\1/dash/retirada/\2',
+        html,
+        count=1,
+        flags=re.IGNORECASE,
+    )
+
+    # CSS compacto.
+    css_marker = "AJUSTE_HUB_RNO_POS_RETIRADA_COMPACTO_ICONES"
+
+    css_fix = """
+/* AJUSTE_HUB_RNO_POS_RETIRADA_COMPACTO_ICONES */
+
+/* Compactacao para notebook padrao */
+.rno-topbar,
+.hub-hero {
+    min-height: 112px !important;
+    height: 112px !important;
+    padding-top: 12px !important;
+    padding-bottom: 12px !important;
+}
+
+.claro-logo-box,
+.hub-logo {
+    width: 86px !important;
+    height: 86px !important;
+    border-radius: 20px !important;
+    font-size: 1.70rem !important;
+}
+
+.rno-main-title,
+.hub-title {
+    font-size: 1.30rem !important;
+}
+
+.rno-sub-title,
+.hub-subtitle {
+    font-size: 0.76rem !important;
+}
+
+.rno-content,
+.hub-page {
+    padding: 18px 22px 22px !important;
+}
+
+/* Mantem o layout atual em 3 colunas, mais compacto */
+.hub-grid,
+.hub-grid-old {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(280px, 1fr)) !important;
+    gap: 16px !important;
+}
+
+.hub-card,
+.hub-card-old {
+    min-height: 202px !important;
+    padding: 20px 24px 18px !important;
+    border-radius: 22px !important;
+}
+
+.hub-icon,
+.hub-icon-old {
+    width: 64px !important;
+    height: 64px !important;
+    border-radius: 18px !important;
+    font-size: 1.48rem !important;
+    line-height: 1 !important;
+    letter-spacing: 0 !important;
+}
+
+.hub-card-title,
+.hub-card-title-old {
+    font-size: 1.14rem !important;
+    line-height: 1.12 !important;
+}
+
+.hub-card-desc,
+.hub-card-desc-old {
+    font-size: 0.88rem !important;
+    line-height: 1.20 !important;
+    min-height: 38px !important;
+}
+
+.hub-card-footer,
+.hub-card-footer-old {
+    margin-top: 12px !important;
+}
+
+.hub-pill,
+.hub-pill-old {
+    min-width: 98px !important;
+    height: 33px !important;
+    padding: 0 15px !important;
+    border-radius: 999px !important;
+    background: linear-gradient(145deg, #E30613, #C70000) !important;
+    color: #FFFFFF !important;
+    font-size: 0.77rem !important;
+    font-weight: 950 !important;
+    box-shadow: 0 10px 20px rgba(227, 6, 19, 0.20) !important;
+}
+
+.hub-status,
+.hub-status-old {
+    color: #10883E !important;
+    font-weight: 900 !important;
+}
+
+/* Paleta dos icones no lugar da numeracao */
+.ico-exec,
+.icon-exec {
+    background: linear-gradient(145deg, #E30613, #D00000) !important;
+}
+
+.ico-backlog,
+.icon-backlog {
+    background: linear-gradient(145deg, #70B7ED, #2778D6) !important;
+}
+
+.ico-quebra,
+.icon-quebra {
+    background: linear-gradient(145deg, #FFB44D, #FF8500) !important;
+}
+
+.ico-log,
+.icon-log {
+    background: linear-gradient(145deg, #8D35C6, #7627B9) !important;
+}
+
+.ico-parc,
+.icon-parceiras {
+    background: linear-gradient(145deg, #E94D87, #D52B72) !important;
+}
+
+.ico-ret,
+.icon-retirada {
+    background: linear-gradient(145deg, #A7DBB3, #7FBF91) !important;
+    color: #6B7280 !important;
+}
+
+@media (max-width: 1180px) {
+    .hub-grid,
+    .hub-grid-old {
+        grid-template-columns: repeat(2, minmax(260px, 1fr)) !important;
+    }
+}
+
+@media (max-width: 760px) {
+    .rno-topbar,
+    .hub-hero {
+        height: auto !important;
+        min-height: 112px !important;
+    }
+
+    .hub-grid,
+    .hub-grid-old {
+        grid-template-columns: 1fr !important;
+    }
+}
+"""
+
+    if css_marker not in html:
+        if "</style>" in html:
+            html = html.replace("</style>", css_fix + "\n</style>", 1)
+        else:
+            html = "<style>\n" + css_fix + "\n</style>\n" + html
+
+    if html != original:
+        backup_file(HUB_FILE)
+        write_text_safe(HUB_FILE, html, encoding)
+        print("[OK] Hub ajustado: tamanho compacto, icones e Retirada ativa.")
+        return True
+
+    print("[INFO] Hub nao precisou de ajuste.")
+    return False
+
+
+def diagnosticar_rotas_hub():
+    """
+    Apenas gera pistas de qual rota renderiza o Hub.
+    Nao altera rotas automaticamente.
+    """
+    achados = []
+
+    for py in ROOT.rglob("*.py"):
+        s = str(py).lower()
+
+        if "__pycache__" in s or ".bak" in s or "backup" in s:
+            continue
+
+        try:
+            txt, _ = read_text_safe(py)
+        except Exception:
+            continue
+
+        low = txt.lower()
+
+        if (
+            "hub_desconexao" in low
+            or "adm/desconexao" in low
+            or "areas/adm/desconexao" in low
+            or "desconexao" in low and "render_template" in low
+        ):
+            linhas = []
+
+            for i, line in enumerate(txt.splitlines(), start=1):
+                l = line.lower()
+
+                if (
+                    "hub_desconexao" in l
+                    or "adm/desconexao" in l
+                    or "areas/adm/desconexao" in l
+                    or ("render_template" in l and "desconexao" in l)
+                ):
+                    linhas.append((i, line.strip()))
+
+            if linhas:
+                achados.append((py, linhas))
+
+    return achados
+
+
+def gerar_relatorio(alteracoes):
+    linhas = []
+    linhas.append("RELATORIO CORRECAO HUB E ERROS POS RETIRADA\n")
+    linhas.append(f"ROOT: {ROOT}\n")
+    linhas.append("=" * 72 + "\n\n")
+
+    for item, status in alteracoes.items():
+        linhas.append(f"{item}: {'SIM' if status else 'NAO'}\n")
+
+    if HUB_FILE.exists():
+        txt, _ = read_text_safe(HUB_FILE)
+        linhas.append("\nVALIDACAO HUB\n")
+        linhas.append(f"Contem /dash/retirada/: {'SIM' if '/dash/retirada/' in txt else 'NAO'}\n")
+        linhas.append(f"Contem ACESSAR: {'SIM' if 'ACESSAR' in txt else 'NAO'}\n")
+        linhas.append(f"Contem EM BREVE: {'SIM' if 'EM BREVE' in txt else 'NAO'}\n")
+        linhas.append(f"Contem numeros 01/02/03: {'SIM' if '>01<' in txt or '>02<' in txt or '>03<' in txt else 'NAO'}\n")
+        linhas.append(f"Contem icones antigos: {'SIM' if '★' in txt and '☑' in txt and '▣' in txt else 'NAO'}\n")
+
+    if DB_FILE.exists():
+        txt, _ = read_text_safe(DB_FILE)
+        linhas.append("\nVALIDACAO DATA/DB\n")
+        linhas.append(f"_DF_CACHE presente: {'SIM' if '_DF_CACHE' in txt else 'NAO'}\n")
+        linhas.append(f"_OPTIONS_CACHE presente: {'SIM' if '_OPTIONS_CACHE' in txt else 'NAO'}\n")
+
+    linhas.append("\nROTAS POSSIVEIS DO HUB\n")
+    achados = diagnosticar_rotas_hub()
+
+    if achados:
+        for py, refs in achados:
+            linhas.append(f"\nArquivo: {py}\n")
+            for n, line in refs:
+                linhas.append(f"  Linha {n}: {line}\n")
+    else:
+        linhas.append("Nenhuma referencia clara encontrada.\n")
+
+    RELATORIO.write_text("".join(linhas), encoding="utf-8")
+    print(f"[RELATORIO] {RELATORIO}")
+
+
+def main():
+    print("=" * 72)
+    print("CORRECAO CONSOLIDADA - HUB + ERROS POS RETIRADA")
+    print("=" * 72)
+    print(f"[ROOT] {ROOT}")
+    print("-" * 72)
+
+    alteracoes = {}
+    alteracoes["Limpeza patches base.html"] = limpar_patches_antigos(BASE_FILE)
+    alteracoes["Limpeza patches hub_desconexao.html"] = limpar_patches_antigos(HUB_FILE)
+    alteracoes["Correcao data/db.py _DF_CACHE"] = corrigir_data_db_cache()
+    alteracoes["Ajuste visual Hub"] = ajustar_hub_atual()
+
+    gerar_relatorio(alteracoes)
+
+    print("=" * 72)
+    print("CONCLUIDO.")
+    print("Agora pare/suba o Flask e atualize com Ctrl + F5.")
+    print("Teste: Hub, /dash/executivo/, /dash/log/ e /dash/retirada/.")
+    print("=" * 72)
+
+
+if __name__ == "__main__":
+    main()

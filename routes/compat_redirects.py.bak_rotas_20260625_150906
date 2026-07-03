@@ -1,0 +1,11 @@
+# -*- coding: utf-8 -*-
+from flask import Blueprint, redirect
+
+compat_redirects_bp = Blueprint('compat_redirects', __name__)
+
+@compat_redirects_bp.route('/areas/adm/desconexao/')
+@compat_redirects_bp.route('/areas/adm/desconexao')
+@compat_redirects_bp.route('/adm/desconexao/')
+@compat_redirects_bp.route('/adm/desconexao')
+def redirect_desconexao_aliases():
+    return redirect('/area/adm/desconexao/', code=302)

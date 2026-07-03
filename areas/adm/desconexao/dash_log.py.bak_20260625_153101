@@ -1,0 +1,303 @@
+# -*- coding: utf-8 -*-
+"""
+Dashboard LOG & Reincidencia - FASE 2B
+Padrao Flask Blueprint + Plotly.js (espelhado no dash_executivo)
+"""
+import json
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+import plotly.io as pio
+from flask import Blueprint, render_template, jsonify, request
+
+from data.db import load_table
+
+bp = Blueprint(
+    "dash_log",
+    __name__,
+    url_prefix="/dash/log",
+    template_folder="templates",
+)
+
+TABLE = "safra_enriquecida"
+
+CATEGORICAL_COLS = [
+    "SAFRA",
+    "DS_TIPO_DESCONEXAO",
+    "NM_CIDADE",
+    "PENDENCIA",
+    "FAIXA_LOG",
+    "ANL_MOTIVO_REAGENDA",
+    "ANL_QUEBRA_RESPONSAVEL",
+    "ANL_QUEBRA_CENARIO",
+    "ANL_TIPO_TRATAMENTO",
+    "LOG_ULT_TIPO_OS",
+]
+
+FILTROS_CASCATA = ["SAFRA", "DS_TIPO_DESCONEXAO", "NM_CIDADE", "PENDENCIA"]
+
+CORES = {
+    "red":        "#E60000",
+    "red_dark":   "#B71C1C",
+    "green":      "#2E7D32",
+    "blue":       "#1565C0",
+    "orange":     "#F57C00",
+    "yellow":     "#F9A825",
+    "gray":       "#9E9E9E",
+}
+
+CORES_LOG = {
+    "SEM LOG": "#9E9E9E",
+    "1x":      "#1565C0",
+    "2-3x":    "#F9A825",
+    "4-5x":    "#F57C00",
+    "6x+":     "#E60000",
+}
+
+# Mapeamento de classificacao das faixas
+FAIXA_SEM_LOG = "SEM LOG"
+FAIXA_CRITICA = "6x+"
+
+
+# ------------------------------------------------------------
+# Helpers
+# ------------------------------------------------------------
+def prepare_df():
+    return load_table(TABLE, categorical_cols=CATEGORICAL_COLS)
+
+
+def apply_filters(df, filters):
+    for col, vals in filters.items():
+        if vals:
+            df = df[df[col].astype(str).isin(vals)]
+    return df
+
+
+def get_options(df, col):
+    if col not in df.columns:
+        return []
+    vals = df[col].dropna().astype(str).unique().tolist()
+    vals = [v for v in vals if v.strip() != "" and v.lower() != "nan"]
+    return sorted(vals)
+
+
+def estilo(fig, titulo="", height=350):
+    fig.update_layout(
+        title=dict(text=titulo, font=dict(size=14, color="#333"), x=0.01),
+        template="plotly_white",
+        height=height,
+        margin=dict(l=20, r=20, t=50, b=20),
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        font=dict(family="Inter, Segoe UI, sans-serif", size=11),
+        legend=dict(
+            font_size=10, orientation="h",
+            yanchor="bottom", y=-0.25, x=0.5, xanchor="center",
+        ),
+    )
+    return fig
+
+
+def fig_vazia(msg="Sem dados"):
+    fig = go.Figure()
+    fig.add_annotation(text=msg, showarrow=False, font_size=16, font_color="#999")
+    fig.update_layout(
+        template="plotly_white", height=350,
+        margin=dict(l=20, r=20, t=40, b=20),
+        plot_bgcolor="white", paper_bgcolor="white",
+    )
+    return fig
+
+
+def fig_to_json(fig):
+    return json.loads(pio.to_json(fig))
+
+
+# ------------------------------------------------------------
+# Rotas
+# ------------------------------------------------------------
+@bp.route("/")
+def index():
+    return render_template("dash_log.html")
+
+
+@bp.route("/api/options")
+def api_options():
+    """Cascata: SAFRA -> TIPO -> CIDADE -> PENDENCIA."""
+    df = prepare_df()
+    selected = {col: request.args.getlist(col) for col in FILTROS_CASCATA}
+
+    print(f"[dash_log/options] selecionados={selected}")
+
+    result = {}
+    df_t = df.copy()
+
+    # SAFRA: sempre opcoes completas (primeiro filtro)
+    result["SAFRA"] = get_options(df_t, "SAFRA")
+    if selected.get("SAFRA"):
+        df_t = df_t[df_t["SAFRA"].astype(str).isin(selected["SAFRA"])]
+
+    result["DS_TIPO_DESCONEXAO"] = get_options(df_t, "DS_TIPO_DESCONEXAO")
+    if selected.get("DS_TIPO_DESCONEXAO"):
+        df_t = df_t[df_t["DS_TIPO_DESCONEXAO"].astype(str).isin(selected["DS_TIPO_DESCONEXAO"])]
+
+    result["NM_CIDADE"] = get_options(df_t, "NM_CIDADE")
+    if selected.get("NM_CIDADE"):
+        df_t = df_t[df_t["NM_CIDADE"].astype(str).isin(selected["NM_CIDADE"])]
+
+    result["PENDENCIA"] = get_options(df_t, "PENDENCIA")
+
+    return jsonify(result)
+
+
+@bp.route("/api/data")
+def api_data():
+    df = prepare_df()
+    filters = {col: request.args.getlist(col) for col in FILTROS_CASCATA}
+    df = apply_filters(df, filters)
+
+    print(f"[dash_log/data] filtros={filters} | linhas={len(df)}")
+
+    if df.empty:
+        vz = fig_to_json(fig_vazia())
+        return jsonify({
+            "kpis": {"total": 0, "com_log": 0, "sem_log": 0,
+                     "criticos": 0, "pct_log": 0.0},
+            "g1": vz, "g2": vz, "g3": vz, "g4": vz, "g5": vz, "g6": vz,
+        })
+
+    # ----------------- KPIs -----------------
+    faixa_str = df["FAIXA_LOG"].astype(str)
+    total = int(len(df))
+    com_log = int((faixa_str != FAIXA_SEM_LOG).sum())
+    sem_log = int((faixa_str == FAIXA_SEM_LOG).sum())
+    criticos = int((faixa_str == FAIXA_CRITICA).sum())
+    pct_log = round(com_log / total * 100, 1) if total > 0 else 0.0
+
+    print(f"[dash_log] KPIs total={total} com_log={com_log} "
+          f"sem_log={sem_log} crit={criticos} pct={pct_log}")
+
+    # ----------------- G1 - Donut FAIXA_LOG -----------------
+    d1 = df.groupby("FAIXA_LOG", observed=True).size().reset_index(name="QTD")
+    d1 = d1.sort_values("FAIXA_LOG")
+    if not d1.empty:
+        g1 = px.pie(d1, values="QTD", names="FAIXA_LOG", hole=0.45,
+                    color="FAIXA_LOG", color_discrete_map=CORES_LOG)
+        g1.update_traces(textinfo="label+percent", textfont_size=11)
+        g1 = estilo(g1, "Distribuicao por Faixa de LOG")
+    else:
+        g1 = fig_vazia()
+
+    # ----------------- G2 - Barra horizontal empilhada por CIDADE -----------------
+    d2 = (df.groupby(["NM_CIDADE", "FAIXA_LOG"], observed=True)
+            .size().reset_index(name="QTD"))
+    if not d2.empty:
+        order = (d2.groupby("NM_CIDADE", observed=True)["QTD"]
+                   .sum().sort_values(ascending=True).index.tolist())
+        g2 = px.bar(d2, x="QTD", y="NM_CIDADE", color="FAIXA_LOG",
+                    orientation="h", color_discrete_map=CORES_LOG,
+                    category_orders={"NM_CIDADE": order})
+        g2.update_layout(barmode="stack")
+        g2 = estilo(g2, "LOG por Cidade", height=400)
+    else:
+        g2 = fig_vazia()
+
+    # ----------------- G3 - Top 10 motivos de reagendamento -----------------
+    d3 = df[df["ANL_MOTIVO_REAGENDA"].notna()]
+    d3 = (d3.groupby("ANL_MOTIVO_REAGENDA", observed=True)
+            .size().reset_index(name="QTD"))
+    d3 = d3.nlargest(10, "QTD").sort_values("QTD", ascending=True)
+    if not d3.empty:
+        g3 = px.bar(d3, x="QTD", y="ANL_MOTIVO_REAGENDA", orientation="h",
+                    text="QTD", color_discrete_sequence=[CORES["red"]])
+        g3.update_traces(textposition="outside", textfont_size=11)
+        g3 = estilo(g3, "Top 10 Motivos de Reagendamento", height=400)
+    else:
+        g3 = fig_vazia("Sem motivos de reagendamento")
+
+    # ----------------- G4 - Criticos por Cidade x SAFRA -----------------
+    df_crit = df[faixa_str == FAIXA_CRITICA]
+    if not df_crit.empty:
+        d4 = (df_crit.groupby(["NM_CIDADE", "SAFRA"], observed=True)
+                .size().reset_index(name="QTD"))
+        # Mantem paleta original azul/laranja/vermelho
+        g4 = px.bar(d4, x="NM_CIDADE", y="QTD", color="SAFRA",
+                    barmode="group", text="QTD",
+                    color_discrete_sequence=[
+                        CORES["blue"], CORES["orange"], CORES["red"],
+                        CORES["green"], CORES["yellow"],
+                    ])
+        g4.update_traces(textposition="outside", textfont_size=10)
+        g4 = estilo(g4, "Contratos Criticos (6+ LOGs) por Cidade x SAFRA",
+                    height=380)
+    else:
+        g4 = fig_vazia("Sem contratos criticos")
+
+    # ----------------- G5 - Responsavel pela Quebra -----------------
+    d5 = df[df["ANL_QUEBRA_RESPONSAVEL"].notna()]
+    d5 = (d5.groupby("ANL_QUEBRA_RESPONSAVEL", observed=True)
+            .size().reset_index(name="QTD"))
+    d5 = d5.sort_values("QTD", ascending=True)
+    if not d5.empty:
+        g5 = px.bar(d5, x="QTD", y="ANL_QUEBRA_RESPONSAVEL", orientation="h",
+                    text="QTD", color_discrete_sequence=[CORES["orange"]])
+        g5.update_traces(textposition="outside", textfont_size=11)
+        g5 = estilo(g5, "Responsavel pela Quebra de Agenda", height=380)
+    else:
+        g5 = fig_vazia("Sem dados de responsavel")
+
+    # ----------------- G6 - go.Figure direto (% Opcao vs Inadimplencia) -----------------
+    # CRITICO: usa go.Figure (NAO px.bar) p/ permitir yaxis.range = [0, 105]
+    d6 = (df.groupby(["FAIXA_LOG", "DS_TIPO_DESCONEXAO"], observed=True)
+            .size().reset_index(name="QTD"))
+    if not d6.empty:
+        d6["QTD_TIPO"] = d6.groupby("DS_TIPO_DESCONEXAO",
+                                     observed=True)["QTD"].transform("sum")
+        d6["PCT"] = (d6["QTD"] / d6["QTD_TIPO"] * 100).round(1)
+
+        faixas_ord = sorted(d6["FAIXA_LOG"].dropna().astype(str).unique())
+        tipos_ord = sorted(d6["DS_TIPO_DESCONEXAO"].dropna().astype(str).unique())
+
+        g6 = go.Figure()
+        for tipo in tipos_ord:
+            sub = d6[d6["DS_TIPO_DESCONEXAO"].astype(str) == tipo].copy()
+            sub = (sub.set_index(sub["FAIXA_LOG"].astype(str))
+                      .reindex(faixas_ord))
+            valores = sub["PCT"].fillna(0).tolist()
+            textos = [f"{v:.1f}%" if v > 0 else "" for v in valores]
+            cor = CORES["blue"] if "OP" in tipo.upper() else CORES["orange"]
+            g6.add_trace(go.Bar(
+                name=tipo,
+                x=faixas_ord,
+                y=valores,
+                marker_color=cor,
+                text=textos,
+                textposition="outside",
+                textfont=dict(size=10),
+            ))
+        g6.update_layout(
+            barmode="group",
+            yaxis=dict(range=[0, 105], title="%", ticksuffix="%"),
+            xaxis=dict(title=""),
+        )
+        g6 = estilo(g6, "Faixa LOG: Opcao vs Inadimplencia (%)", height=380)
+    else:
+        g6 = fig_vazia()
+
+    print("[dash_log] Graficos gerados com sucesso")
+
+    return jsonify({
+        "kpis": {
+            "total": total,
+            "com_log": com_log,
+            "sem_log": sem_log,
+            "criticos": criticos,
+            "pct_log": pct_log,
+        },
+        "g1": fig_to_json(g1),
+        "g2": fig_to_json(g2),
+        "g3": fig_to_json(g3),
+        "g4": fig_to_json(g4),
+        "g5": fig_to_json(g5),
+        "g6": fig_to_json(g6),
+    })

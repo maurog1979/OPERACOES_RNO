@@ -1,0 +1,45 @@
+# RELATÓRIO — MELHORAR VISUAL FORTE DASH_RETIRADA
+ROOT: C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO
+
+HTML encontrado: C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO\templates\dash_retirada.html
+
+BACKUP:
+- C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO\templates\dash_retirada.html.bak_visual_forte_20260625_160010
+
+ALTERAÇÕES:
+- CSS visual forte inserido
+- Helpers visuais fortes inseridos
+- Função substituída: baseLayout
+- Função substituída: emptyChart
+- Função substituída: stackedPercent
+- Função substituída: stackedQtd
+- Função substituída: donut
+- Título trocado: "Performance por Cidade" -> "Performance por Cidade"
+- Título trocado: "Top 10 Parceiras — Volume + Performance" -> "Parceiras — Volume e Performance"
+- Título trocado: "Top 10 Habilidades TOA — Volume + Performance" -> "Habilidades TOA — Volume e Performance"
+- Resize automático pós-render inserido
+
+VALIDAÇÕES:
+- OK | CSS forte presente
+- OK | textoBarraQtd presente
+- OK | textoBarraPct presente
+- OK | baseLayout forte presente
+- OK | stackedQtd forte presente
+- OK | donut total central presente
+- OK | título antigo Top 10 Parceiras removido
+- OK | título novo Parceiras presente
+- OK | resize pós-render presente
+- OK | g6 altura forte presente
+
+TESTE:
+1) Pare o Flask com CTRL+C.
+2) Rode: python run.py
+3) Abra: http://localhost:5000/dash/retirada/
+4) Pressione Ctrl+F5.
+
+RESULTADO VISUAL ESPERADO:
+- Cards de gráficos mais altos e com topo vermelho.
+- Título 'Top 10 Parceiras — Volume + Performance' substituído.
+- Barras pequenas com menos números espremidos.
+- Donuts com total central.
+- G6 mais alto para habilidades TOA.

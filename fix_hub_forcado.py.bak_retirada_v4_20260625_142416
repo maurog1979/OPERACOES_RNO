@@ -1,0 +1,371 @@
+# -*- coding: utf-8 -*-
+"""
+fix_hub_forcado.py
+Portal Operações RNO — FASE 2B
+Correção FORÇADA do templates/hub_desconexao.html.
+"""
+from __future__ import annotations
+import shutil
+from datetime import datetime
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parent
+TARGET = PROJECT_ROOT / "templates" / "hub_desconexao.html"
+
+HTML = """{% extends "base.html" %}
+
+{% block title %}ADM | Desconexão{% endblock %}
+
+{% block content %}
+<style>
+  :root {
+    --claro-red: #E60000;
+    --claro-red-dark: #B71C1C;
+    --card: #FFFFFF;
+    --text: #202234;
+    --muted: #6C757D;
+    --soon: #F4A261;
+  }
+
+  .hub-wrap {
+    width: min(1780px, calc(100vw - 56px));
+    margin: 0 auto;
+    padding: 34px 0 54px;
+  }
+
+  .hub-breadcrumb {
+    color: #8B8EA1;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    margin-bottom: 18px;
+  }
+
+  .hub-hero {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+    margin-bottom: 28px;
+  }
+
+  .hub-titlebox {
+    border-left: 7px solid var(--claro-red);
+    padding-left: 18px;
+  }
+
+  .hub-eyebrow {
+    color: var(--claro-red);
+    font-size: 13px;
+    font-weight: 900;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .hub-title {
+    margin: 0;
+    color: var(--text);
+    font-size: clamp(30px, 3vw, 46px);
+    line-height: 1.03;
+    font-weight: 950;
+  }
+
+  .hub-subtitle {
+    margin: 12px 0 0;
+    max-width: 760px;
+    color: var(--muted);
+    font-size: 17px;
+    line-height: 1.45;
+    font-weight: 600;
+  }
+
+  .hub-pill {
+    flex: 0 0 auto;
+    padding: 12px 18px;
+    border-radius: 999px;
+    background: #fff;
+    border: 1px solid rgba(0,0,0,.06);
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 900;
+    box-shadow: 0 16px 36px rgba(19, 24, 44, .06);
+  }
+
+  .hub-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(250px, 1fr));
+    gap: 28px;
+  }
+
+  .dash-card,
+  .dash-card-soon {
+    position: relative;
+    min-height: 230px;
+    border-radius: 28px;
+    background: var(--card);
+    border: 1px solid rgba(0,0,0,.055);
+    box-shadow: 0 18px 48px rgba(25, 30, 55, .055);
+    padding: 31px 31px 26px;
+    overflow: hidden;
+    text-decoration: none !important;
+    color: inherit;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+  }
+
+  a.dash-card {
+    cursor: pointer !important;
+    pointer-events: auto !important;
+    opacity: 1 !important;
+    filter: none !important;
+  }
+
+  a.dash-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 26px 70px rgba(25, 30, 55, .105);
+    border-color: rgba(230, 0, 0, .18);
+  }
+
+  a.dash-card:focus-visible {
+    outline: 4px solid rgba(230,0,0,.18);
+    outline-offset: 4px;
+  }
+
+  .dash-card-soon {
+    opacity: .62;
+    cursor: not-allowed;
+    pointer-events: none;
+    filter: grayscale(.08);
+  }
+
+  .card-icon {
+    width: 74px;
+    height: 74px;
+    border-radius: 19px;
+    display: grid;
+    place-items: center;
+    color: #fff;
+    font-size: 31px;
+    box-shadow: 0 18px 36px rgba(230, 0, 0, .18);
+    margin-bottom: 20px;
+  }
+
+  .ic-red { background: linear-gradient(135deg, #E60000, #B71C1C); }
+  .ic-blue { background: linear-gradient(135deg, #90CAF9, #1976D2); }
+  .ic-orange { background: linear-gradient(135deg, #FFCC80, #F57C00); }
+  .ic-purple { background: linear-gradient(135deg, #9C27B0, #5E35B1); }
+  .ic-green { background: linear-gradient(135deg, #9BE7B0, #2E7D32); }
+  .ic-pink { background: linear-gradient(135deg, #F06292, #C2185B); }
+
+  .card-title {
+    margin: 0 0 8px;
+    color: var(--text);
+    font-size: 24px;
+    font-weight: 950;
+    letter-spacing: -.03em;
+  }
+
+  .card-desc {
+    margin: 0;
+    color: #82889A;
+    font-size: 16px;
+    line-height: 1.45;
+    font-weight: 650;
+  }
+
+  .card-bottom {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    margin-top: 24px;
+  }
+
+  .card-status {
+    color: #6C757D;
+    font-size: 14px;
+    font-weight: 900;
+  }
+
+  .card-arrow {
+    color: var(--claro-red);
+    font-size: 30px;
+    line-height: 1;
+    font-weight: 950;
+    transform: translateX(0);
+    opacity: 1;
+    transition: transform .18s ease;
+  }
+
+  a.dash-card:hover .card-arrow {
+    transform: translateX(5px);
+  }
+
+  .soon-badge {
+    padding: 8px 16px;
+    border-radius: 999px;
+    background: #F4A261;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 950;
+    text-transform: uppercase;
+  }
+
+  @media (max-width: 1280px) { .hub-grid { grid-template-columns: repeat(3, minmax(250px, 1fr)); } }
+  @media (max-width: 980px) { .hub-grid { grid-template-columns: repeat(2, minmax(250px, 1fr)); } .hub-hero { align-items: flex-start; flex-direction: column; } }
+  @media (max-width: 620px) { .hub-wrap { width: min(100% - 28px, 1780px); padding-top: 24px; } .hub-grid { grid-template-columns: 1fr; gap: 18px; } .dash-card, .dash-card-soon { min-height: 210px; padding: 26px; border-radius: 23px; } }
+</style>
+
+<div class="hub-wrap">
+  <div class="hub-breadcrumb">ADM / DESCONEXÃO</div>
+
+  <section class="hub-hero">
+    <div class="hub-titlebox">
+      <div class="hub-eyebrow">Portal Operações RNO</div>
+      <h1 class="hub-title">Dashboards de Desconexão</h1>
+      <p class="hub-subtitle">
+        Relatórios executivos e operacionais para acompanhamento da safra, backlog,
+        quebra de agenda, LOG, reincidência, parceiras e retirada de equipamentos.
+      </p>
+    </div>
+    <div class="hub-pill">5 dashboards ativos · 1 ACESSAR</div>
+  </section>
+
+  <section class="hub-grid" aria-label="Dashboards disponíveis">
+
+    <a class="dash-card" href="/dash/executivo/" aria-label="Abrir dashboard Visão Executiva">
+      <div>
+        <div class="card-icon ic-red">★</div>
+        <h2 class="card-title">Visão Executiva</h2>
+        <p class="card-desc">Indicadores estratégicos C-level (4 KPIs + 6 gráficos)</p>
+      </div>
+      <div class="card-bottom"><span class="card-status">Ativo</span><span class="card-arrow">→</span></div>
+    </a>
+
+    <a class="dash-card" href="/dash/backlog/" aria-label="Abrir dashboard Backlog">
+      <div>
+        <div class="card-icon ic-blue">☑</div>
+        <h2 class="card-title">Backlog</h2>
+        <p class="card-desc">Backlog OS por cidade, aging e parceiro</p>
+      </div>
+      <div class="card-bottom"><span class="card-status">Ativo</span><span class="card-arrow">→</span></div>
+    </a>
+
+    <a class="dash-card" href="/dash/quebra/" aria-label="Abrir dashboard Quebra de Agenda">
+      <div>
+        <div class="card-icon ic-orange">▣</div>
+        <h2 class="card-title">Quebra de Agenda</h2>
+        <p class="card-desc">Análise de quebras de agenda</p>
+      </div>
+      <div class="card-bottom"><span class="card-status">Ativo</span><span class="card-arrow">→</span></div>
+    </a>
+
+    <a class="dash-card" href="/dash/log/" aria-label="Abrir dashboard LOG e Reincidência">
+      <div>
+        <div class="card-icon ic-purple">↻</div>
+        <h2 class="card-title">LOG &amp; Reincidência</h2>
+        <p class="card-desc">Histórico de LOG e reincidências</p>
+      </div>
+      <div class="card-bottom"><span class="card-status">Ativo</span><span class="card-arrow">→</span></div>
+    </a>
+
+    <div class="dash-card-soon" aria-disabled="true">
+      <div>
+        <div class="card-icon ic-green">▥</div>
+        <h2 class="card-title">Retirada de Equipamentos</h2>
+        <p class="card-desc">Performance TOA · retirada de equipamentos</p>
+      </div>
+      <div class="card-bottom"><span class="card-status">Disponível</span><span class="soon-badge">ACESSAR</span></div>
+    </div>
+
+    <a class="dash-card" href="/dash/parceiras/" aria-label="Abrir dashboard Parceiras">
+      <div>
+        <div class="card-icon ic-pink">◆</div>
+        <h2 class="card-title">Parceiras</h2>
+        <p class="card-desc">Performance por parceira</p>
+      </div>
+      <div class="card-bottom"><span class="card-status">Ativo</span><span class="card-arrow">→</span></div>
+    </a>
+
+  </section>
+</div>
+{% endblock %}
+"""
+
+
+def read_text_safe(path: Path) -> tuple[str, str]:
+    for enc in ("utf-8-sig", "utf-8", "cp1252", "latin-1"):
+        try:
+            return path.read_text(encoding=enc), enc
+        except UnicodeDecodeError:
+            pass
+    return path.read_text(errors="replace"), "utf-8"
+
+
+def main() -> None:
+    print("=" * 78)
+    print("FIX HUB FORÇADO — recriação segura do hub_desconexao.html")
+    print("=" * 78)
+    print(f"Raiz detectada : {PROJECT_ROOT}")
+    print(f"Arquivo alvo   : {TARGET}")
+
+    if not TARGET.exists():
+        print("\nERRO: não encontrei templates/hub_desconexao.html")
+        print("Execute este script dentro da raiz do projeto OPERACOES_RNO.")
+        return
+
+    _old_html, enc = read_text_safe(TARGET)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup = TARGET.with_name(f"hub_desconexao.backup_fix_hub_forcado_{stamp}.html")
+    shutil.copy2(TARGET, backup)
+
+    TARGET.write_text(HTML, encoding="utf-8")
+    final = TARGET.read_text(encoding="utf-8")
+
+    checks = [
+        ("Visão Executiva", 'href="/dash/executivo/"' in final),
+        ("Backlog", 'href="/dash/backlog/"' in final),
+        ("Quebra de Agenda", 'href="/dash/quebra/"' in final),
+        ("LOG & Reincidência", 'href="/dash/log/"' in final),
+        ("Parceiras", 'href="/dash/parceiras/"' in final),
+        ("Retirada sem link /dash/retirada/", "/dash/retirada/" not in final),
+        ("Retirada marcada como ACESSAR", "ACESSAR" in final),
+    ]
+
+    print("\nBackup criado:")
+    print(f"   {backup}")
+    print(f"\nArquivo regravado em UTF-8: {TARGET}")
+    print(f"Encoding anterior detectado: {enc}")
+
+    print("\nValidação automática:")
+    ok_all = True
+    for label, ok in checks:
+        ok_all = ok_all and ok
+        print(f" - {'OK' if ok else 'FALHA'} {label}")
+
+    print("\nRotas ativas no Hub:")
+    print(" - /dash/executivo/")
+    print(" - /dash/backlog/")
+    print(" - /dash/quebra/")
+    print(" - /dash/log/")
+    print(" - /dash/parceiras/")
+    print(" - Retirada de Equipamentos: ACESSAR")
+
+    if ok_all:
+        print("\nHUB CORRIGIDO: os cards ativos agora são anchors <a> reais com href direto.")
+    else:
+        print("\nHouve alguma validação negativa. Confira o arquivo gerado.")
+
+    print("\nDepois de executar:")
+    print("1) Reinicie o Flask se a tela continuar igual.")
+    print("2) Use CTRL + F5 no navegador.")
+    print("3) Abra o Hub Desconexão e clique em Backlog e Quebra de Agenda.")
+    print("=" * 78)
+
+
+if __name__ == "__main__":
+    main()

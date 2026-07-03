@@ -1,0 +1,37 @@
+RELATORIO CORRIGIR ROTAS HUB LOG RETIRADA
+ROOT: C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO
+Rota correta Hub: /area/adm/desconexao/
+========================================================================
+
+Criar compat_redirects.py: SIM
+Registrar blueprint no app.py: SIM
+Corrigir links errados: 13 arquivo(s)
+  - app.py
+  - diagnosticar_app.py
+  - fix12_dash_quebra.py
+  - fix2.py
+  - fix_completo.py
+  - fix_dash_log_v2.py
+  - areas\adm\desconexao\templates\dash_backlog.html
+  - areas\adm\desconexao\templates\dash_executivo.html
+  - areas\adm\desconexao\templates\dash_log.html
+  - areas\adm\desconexao\templates\dash_parceiras.html
+  - areas\adm\desconexao\templates\dash_quebra.html
+  - routes\compat_redirects.py
+  - templates\dash_retirada.html
+Corrigir data/db.py caches: NAO
+
+DIAGNOSTICO DASH_LOG
+Arquivo: C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO\areas\adm\desconexao\dash_log.py
+Trecho: ROUTE @bp.route("/")
+------------------------------------------------------------------------
+Arquivo: C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO\areas\adm\desconexao\dash_log.py
+Trecho: ROUTE @bp.route("/api/options")
+------------------------------------------------------------------------
+Arquivo: C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO\areas\adm\desconexao\dash_log.py
+Trecho: ROUTE @bp.route("/api/data")
+------------------------------------------------------------------------
+
+VALIDACAO DATA/DB
+_DF_CACHE presente: SIM
+_OPTIONS_CACHE presente: SIM

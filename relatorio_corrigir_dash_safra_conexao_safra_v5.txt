@@ -1,0 +1,12 @@
+RELATORIO - CORRIGIR DASH SAFRA CONEXAO SAFRA V5
+Data/hora: 2026-06-26 11:30:32
+Raiz: C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO
+Arquivo corrigido: C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO\areas\adm\desconexao\dash_safra.py
+Backup: C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO\areas\adm\desconexao\dash_safra.py.bak_conexao_safra_v5_20260626_113032
+Banco configurado: safra
+Host: localhost
+Porta: 3306
+Usuario: root
+Status conexao: _conn substituida
+Status diagnostico: diagnostico inserido antes de options
+Teste apos reiniciar Flask: /dash/safra/api/diagnostico

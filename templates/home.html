@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Home{% endblock %}
+
+{% block content %}
+<section class="hero">
+  <div class="bubble b1"></div>
+  <div class="bubble b2"></div>
+  <div class="bubble b3"></div>
+  <div class="bubble b4"></div>
+  <div class="bubble b5"></div>
+  <div class="hero-content">
+    <div class="hero-badge"><i class="fa-solid fa-bolt"></i> PORTAL OPERACIONAL</div>
+    <h1 class="hero-title">Operações<span class="line-accent"></span>RNO</h1>
+    <p class="hero-description">Inteligência operacional da Regional Norte. Acesse dashboards, indicadores e relatórios das 8 áreas operacionais em um único lugar.</p>
+    <div class="hero-stats">
+      <div class="stat-pill"><i class="fa-solid fa-hand-sparkles"></i> Olá, Mauro</div>
+      <div class="stat-pill"><i class="fa-solid fa-layer-group"></i> {{ areas|length }} Áreas</div>
+      <div class="stat-pill"><i class="fa-solid fa-rocket"></i> {{ APP_VERSION }}</div>
+    </div>
+  </div>
+  <svg class="hero-wave" viewBox="0 0 1440 80" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M0,80 Q360,0 720,40 T1440,80 L1440,80 L0,80 Z" fill="#F4F6F9"/>
+  </svg>
+</section>
+
+<main class="main">
+  <h2 class="section-title">Áreas Operacionais</h2>
+  <div class="cards-grid">
+    {% for area in areas %}
+      {% if area.ativo %}
+        <a href="{{ url_for('area_view', area_slug=area.slug) }}" class="card-link">
+          <div class="card">
+            <div class="card-icon {{ area.cor }}"><i class="fa-solid {{ area.icone }}"></i></div>
+            <h3 class="card-title">{{ area.nome }}</h3>
+            <p class="card-desc">{{ area.descricao }}</p>
+            <div class="card-meta"><span>{{ area.meta }}</span><i class="fa-solid fa-arrow-right"></i></div>
+          </div>
+        </a>
+      {% else %}
+        <a href="{{ url_for('area_view', area_slug=area.slug) }}" class="card-link">
+          <div class="card disabled">
+            <div class="card-icon {{ area.cor }}"><i class="fa-solid {{ area.icone }}"></i></div>
+            <h3 class="card-title">{{ area.nome }}</h3>
+            <p class="card-desc">{{ area.descricao }}</p>
+            <div class="card-meta"><span></span><span class="badge-soon">Em Breve</span></div>
+          </div>
+        </a>
+      {% endif %}
+    {% endfor %}
+  </div>
+</main>
+{% endblock %}

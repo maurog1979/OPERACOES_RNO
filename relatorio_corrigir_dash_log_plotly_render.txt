@@ -1,0 +1,39 @@
+# RELATÓRIO — CORRIGIR DASH_LOG PLOTLY RENDER
+ROOT: C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO
+PY_FILE: C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO\areas\adm\desconexao\dash_log.py
+HTML_FILE: C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO\areas\adm\desconexao\templates\dash_log.html
+
+BACKUPS:
+- PY backup: C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO\areas\adm\desconexao\dash_log.py.bak_render_20260625_153544
+- HTML backup: C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO\areas\adm\desconexao\templates\dash_log.html.bak_render_20260625_153544
+
+ALTERAÇÕES:
+- dash_log.py atualizado com serialização Plotly segura.
+- dash_log.html atualizado com Plotly.js 2.35.2 e contenção visual.
+
+VALIDAÇÕES:
+- OK | dash_log.py existe
+- OK | dash_log.html existe
+- OK | PlotlyJSONEncoder importado
+- OK | função _plotly_sanitize presente
+- OK | fig_to_json seguro presente
+- OK | pio.to_json não usado no fig_to_json
+- OK | template removido na serialização
+- OK | Plotly.js 2.35.2 no HTML
+- OK | Plotly.react usado
+- OK | Plotly.purge usado
+- OK | link Voltar correto
+- OK | link Voltar quebrado removido
+
+PRÓXIMO TESTE:
+1) Reinicie o Flask.
+2) Abra: http://localhost:5000/dash/log/
+3) Pressione Ctrl+F5 no navegador.
+4) Se necessário, teste diretamente:
+   http://localhost:5000/dash/log/api/data
+
+RESULTADO ESPERADO:
+- Nada de JSON bruto na tela.
+- Nada de mapas/tabelas/legendas estranhas vazando.
+- Cards com gráficos Plotly limpos dentro dos containers.
+- KPIs preenchidos.

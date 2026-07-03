@@ -1,0 +1,137 @@
+# RELATÓRIO DE VALIDAÇÃO — DASH_LOG
+Data/hora: 2026-06-25 17:40:32
+ROOT: C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO
+Página: http://localhost:5000/dash/log/
+API Options: http://localhost:5000/dash/log/api/options
+API Data: http://localhost:5000/dash/log/api/data
+
+## STATUS GERAL
+- Resultado geral: 82/82 validações OK
+- Status: APROVADO
+
+## VALIDAÇÃO DOS ARQUIVOS
+Resultado: 22/22 OK
+
+- OK | Arquivo dash_log.py existe | C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO\areas\adm\desconexao\dash_log.py
+- OK | Arquivo dash_log.html existe | C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO\areas\adm\desconexao\templates\dash_log.html
+- OK | Blueprint possui url_prefix /dash/log
+- OK | Rota principal / declarada no dash_log.py
+- OK | Rota /api/options declarada no dash_log.py
+- OK | Rota /api/data declarada no dash_log.py
+- OK | API /api/data retorna charts via montar_charts
+- OK | API /api/data retorna kpis via montar_kpis
+- OK | count_col_fallback presente no backend
+- OK | Controle is_fallback_empty presente no backend
+- OK | G3 não usa FAIXA_LOG como fallback indevido
+- OK | G4 não usa NM_CIDADE como fallback indevido
+- OK | HTML usa Plotly.js 2.35.2
+- OK | HTML possui Choices.js CSS e JS
+- OK | Botão Voltar aponta para /area/adm/desconexao/
+- OK | Frontend renderiza charts.g1_faixa_log
+- OK | Frontend renderiza charts.g2_com_sem_log
+- OK | Frontend renderiza charts.g3_motivos
+- OK | Frontend renderiza charts.g4_responsaveis
+- OK | Frontend renderiza charts.g5_tipo_log
+- OK | Frontend renderiza charts.g6_cidades_log
+- OK | Frontend trata is_fallback_empty
+
+## VALIDAÇÃO DA PÁGINA /dash/log/
+Resultado: 5/5 OK
+
+- OK | Página /dash/log/ responde HTTP 2xx | status=200
+- OK | Página /dash/log/ retorna HTML | text/html; charset=utf-8
+- OK | HTML da página contém referência a LOG
+- OK | HTML contém chamada para /dash/log/api/data
+- OK | HTML contém chamada para /dash/log/api/options
+
+## VALIDAÇÃO DA API /api/options
+Resultado: 11/11 OK
+
+- OK | API /dash/log/api/options responde HTTP 2xx | status=200
+- OK | API /api/options retorna application/json | application/json
+- OK | JSON de /api/options é objeto/dicionário
+- OK | Options contém filtro SAFRA
+- OK | Options SAFRA é lista
+- OK | Options contém filtro DS_TIPO_DESCONEXAO
+- OK | Options DS_TIPO_DESCONEXAO é lista
+- OK | Options contém filtro NM_CIDADE
+- OK | Options NM_CIDADE é lista
+- OK | Options contém filtro PENDENCIA
+- OK | Options PENDENCIA é lista
+
+## VALIDAÇÃO DA API /api/data
+Resultado: 44/44 OK
+
+- OK | API /dash/log/api/data responde HTTP 2xx | status=200
+- OK | API /api/data retorna application/json | application/json
+- OK | JSON de /api/data é objeto/dicionário
+- OK | Payload possui ok=true | ok=True
+- OK | Payload possui kpis
+- OK | Payload possui charts
+- OK | KPI presente: total | 62875
+- OK | KPI presente: com_log | 35898
+- OK | KPI presente: sem_log | 26977
+- OK | KPI presente: criticos | 4582
+- OK | KPI presente: pct_log | 57.1
+- OK | KPI total é inteiro >= 0 | 62875
+- OK | KPI com_log é inteiro >= 0 | 35898
+- OK | KPI sem_log é inteiro >= 0 | 26977
+- OK | KPI criticos é inteiro >= 0 | 4582
+- OK | Validação lógica: com_log + sem_log <= total | com_log=35898, sem_log=26977, total=62875
+- OK | Chart presente: g1_faixa_log
+- OK | Chart presente: g2_com_sem_log
+- OK | Chart presente: g3_motivos
+- OK | Chart presente: g4_responsaveis
+- OK | Chart presente: g5_tipo_log
+- OK | Chart presente: g6_cidades_log
+- OK | G1 labels é lista
+- OK | G1 values é lista
+- OK | G2 labels é lista
+- OK | G2 values é lista
+- OK | G3 labels é lista
+- OK | G3 values é lista
+- OK | G3 possui title | Motivos — sem preenchimento no analítico
+- OK | G3 possui source_col
+- OK | G3 possui is_fallback_empty | True
+- OK | G3 não caiu em FAIXA_LOG
+- OK | G4 labels é lista
+- OK | G4 values é lista
+- OK | G4 possui title | Responsáveis — sem preenchimento no analítico
+- OK | G4 possui source_col
+- OK | G4 possui is_fallback_empty | True
+- OK | G4 não caiu em NM_CIDADE
+- OK | G5 labels é lista
+- OK | G5 series é dicionário
+- OK | G6 labels é lista
+- OK | G6 values é lista
+- OK | Payload possui total_linhas_cache | 62875
+- OK | Payload possui total_linhas_filtrado | 62875
+
+## RESUMO DA API /dash/log/api/data
+- ok: True
+- total_linhas_cache: 62875
+- total_linhas_filtrado: 62875
+
+### KPIs
+- total: 62875
+- com_log: 35898
+- sem_log: 26977
+- criticos: 4582
+- pct_log: 57.1%
+
+### G3 — Motivos
+- title: Motivos — sem preenchimento no analítico
+- source_col: 
+- is_fallback_empty: True
+- qtd_labels: 1
+  - Sem preenchimento no analítico: 62875
+
+### G4 — Responsáveis
+- title: Responsáveis — sem preenchimento no analítico
+- source_col: 
+- is_fallback_empty: True
+- qtd_labels: 1
+  - Sem preenchimento no analítico: 62875
+
+## ARQUIVO JSON GERADO
+- C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO\validacao_dash_log_api_data.json

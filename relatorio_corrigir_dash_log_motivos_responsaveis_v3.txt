@@ -1,0 +1,42 @@
+# RELATÓRIO — CORRIGIR DASH_LOG MOTIVOS E RESPONSÁVEIS V3
+ROOT: C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO
+PY_FILE: C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO\areas\adm\desconexao\dash_log.py
+HTML_FILE: C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO\areas\adm\desconexao\templates\dash_log.html
+
+BACKUPS:
+- PY backup: C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO\areas\adm\desconexao\dash_log.py.bak_motivos_resp_v3_20260625_165813
+- HTML backup: C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO\areas\adm\desconexao\templates\dash_log.html.bak_motivos_resp_v3_20260625_165813
+
+ALTERAÇÕES PYTHON:
+- count_col_fallback antigo removido
+- count_col_fallback V3 inserido
+- montar_charts substituída por versão V3
+
+ALTERAÇÕES HTML:
+- renderCharts substituída por versão V3
+
+VALIDAÇÕES:
+- OK | dash_log.py existe
+- OK | dash_log.html existe
+- OK | count_col_fallback V3 presente
+- OK | G3 não usa FAIXA_LOG como fallback
+- OK | G4 não usa NM_CIDADE como fallback
+- OK | G3 usa ANL_MOTIVO_REAGENDA
+- OK | G3 usa ANL_QUEBRA_CENARIO
+- OK | G4 usa ANL_QUEBRA_RESPONSAVEL
+- OK | HTML usa is_fallback_empty
+- OK | HTML renderCharts V3 presente
+
+TESTE:
+1) Pare o Flask com CTRL+C.
+2) Rode: python run.py
+3) Abra: http://localhost:5000/dash/log/
+4) Pressione Ctrl+F5.
+5) Teste direto: http://localhost:5000/dash/log/api/data
+
+RESULTADO ESPERADO:
+- G3 não deve mais cair em Distribuição por Faixa LOG.
+- G4 não deve mais cair em Cidades com Maior Volume.
+- Se as colunas analíticas estiverem vazias, aparece barra cinza indicando sem preenchimento.
+- Se houver dados em ANL_MOTIVO_REAGENDA, ANL_QUEBRA_CENARIO, ANL_TIPO_TRATAMENTO ou LOG_ULT_TIPO_OS, G3 usa esses dados.
+- Se houver dados em ANL_QUEBRA_RESPONSAVEL, G4 usa esses dados.

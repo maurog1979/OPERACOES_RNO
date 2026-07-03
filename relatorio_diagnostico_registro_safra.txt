@@ -1,0 +1,16 @@
+RELATÓRIO — DIAGNÓSTICO/REGISTRO PAINEL SAFRA
+Data/hora: 2026-06-26 09:53:22
+Raiz detectada: C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO
+
+dash_safra.py existe: NÃO — C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO\areas\adm\desconexao\dash_safra.py
+dash_safra.html existe: NÃO — C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO\areas\adm\desconexao\templates\dash_safra.html
+Rota /dash/safra/ encontrada no dash_safra.py: NÃO
+
+Arquivos candidatos encontrados:
+- score 19: C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO\app.py
+- score 6: C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO\areas\adm\desconexao\__init__.py
+- score 6: C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO\_backup_20260624_114509\areas\adm\desconexao\__init__.py
+- score 4: C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO\run.py
+
+Arquivo escolhido para registro: C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO\app.py
+ERRO: dash_safra.py não existe. Crie primeiro o dashboard.

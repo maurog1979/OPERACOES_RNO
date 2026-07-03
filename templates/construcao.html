@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Em Construção{% endblock %}
+
+{% block content %}
+<main class="main">
+  <a href="{{ url_for('home') }}" class="breadcrumb-link">
+    <div class="breadcrumb">
+      <i class="fa-solid fa-house"></i> Home
+      <i class="fa-solid fa-chevron-right"></i>
+      <strong style="color:var(--text-primary);">{{ area_nome }}</strong>
+    </div>
+  </a>
+
+  <div class="placeholder">
+    <div class="icon-big"><i class="fa-solid fa-triangle-exclamation"></i></div>
+    <h3>{% if mensagem_custom %}{{ area_nome }}{% else %}Área em Construção{% endif %}</h3>
+    <p>{% if mensagem_custom %}{{ mensagem_custom }}{% else %}Esta área está sendo preparada e em breve estará disponível com dashboards e relatórios completos.{% endif %}</p>
+    <a href="{{ url_for('home') }}" class="btn-back-link">
+      <button class="btn-back" type="button">
+        <i class="fa-solid fa-arrow-left"></i> Voltar para Home
+      </button>
+    </a>
+  </div>
+</main>
+{% endblock %}

@@ -1,0 +1,97 @@
+"""Flask app factory do Portal Operações RNO."""
+from flask import Flask, render_template, abort, redirect, url_for
+from config import Config
+from data.areas import AREAS, get_area, get_setor
+
+
+def create_app():
+    app = Flask(__name__)
+    app.config.from_object(Config)
+
+    # Registrar Blueprints do setor Desconexão (ADM)
+    try:
+        from areas.adm.desconexao import dash_executivo_bp
+        app.register_blueprint(dash_executivo_bp)
+        print("[APP] Blueprint dash_executivo registrado em /dash/executivo/")
+    except Exception as e:
+        print(f"[APP] AVISO: não foi possível registrar dash_executivo_bp: {e}")
+
+    try:
+        from areas.adm.desconexao import dash_log_bp, dash_parceiras_bp
+        app.register_blueprint(dash_log_bp)
+    register_blueprint(dash_parceiras_bp)
+        print("[APP] Blueprint dash_log registrado em /dash/log/")
+    except Exception as e:
+        print(f"[APP] AVISO: não foi possível registrar dash_log_bp: {e}")
+
+    @app.context_processor
+    def inject_globals():
+        return {
+            "APP_NAME": app.config["APP_NAME"],
+            "APP_VERSION": app.config["APP_VERSION"],
+            "USER_NAME": app.config["USER_NAME"],
+            "USER_INITIALS": app.config["USER_INITIALS"],
+        }
+
+    # =========================================================
+    # ROTA 1: HOME
+    # =========================================================
+    @app.route("/")
+    def home():
+        return render_template("home.html", areas=AREAS)
+
+    # =========================================================
+    # ROTA 2: ÁREA (escolha de setor)
+    # =========================================================
+    @app.route("/area/<area_slug>")
+    def area_view(area_slug):
+        area = get_area(area_slug)
+        if area is None:
+            abort(404)
+        if area.get("ativo") and area.get("setores"):
+            return render_template("area.html", area=area)
+        return render_template("construcao.html", area_nome=area["nome"])
+
+    # =========================================================
+    # ROTA 3: SETOR (genérica)
+    # =========================================================
+    @app.route("/area/<area_slug>/<setor_slug>")
+    def setor_view(area_slug, setor_slug):
+        area = get_area(area_slug)
+        if area is None:
+            abort(404)
+        setor = get_setor(area, setor_slug)
+        if setor is None:
+            abort(404)
+        # ADM/Desconexão tem hub específico
+        if area_slug == "adm" and setor_slug == "desconexao":
+            return redirect(url_for("hub_desconexao"))
+        if not setor.get("ativo"):
+            return render_template(
+                "construcao.html",
+                area_nome=f"{area['nome']} · {setor['nome']}",
+            )
+        return render_template(
+            "construcao.html",
+            area_nome=f"{area['nome']} · {setor['nome']}",
+            mensagem_custom="Setor ativo em construção.",
+        )
+
+    # =========================================================
+    # HUB DESCONEXÃO (6 dashboards)
+    # =========================================================
+    @app.route("/area/adm/desconexao/")
+    def hub_desconexao():
+        return render_template("hub_desconexao.html")
+
+    @app.route("/area/<area_slug>/em-construcao")
+    def em_construcao(area_slug):
+        area = get_area(area_slug)
+        nome = area["nome"] if area else area_slug.upper()
+        return render_template("construcao.html", area_nome=nome)
+
+    @app.errorhandler(404)
+    def not_found(e):
+        return render_template("construcao.html", area_nome="Página não encontrada"), 404
+
+    return app
