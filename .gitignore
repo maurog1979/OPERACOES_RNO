@@ -1,0 +1,97 @@
+# =============================================
+# Python
+# =============================================
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+*.egg-info/
+build/
+dist/
+
+# =============================================
+# Ambiente virtual
+# =============================================
+.venv/
+venv/
+env/
+ENV/
+
+# =============================================
+# Arquivos de configuração sensíveis
+# =============================================
+.env
+.env.*
+*.local
+
+# =============================================
+# Backups / arquivos de trabalho temporários
+# =============================================
+*.bak
+*.bak_*
+*.bkp
+*.bkp_*
+*.backup
+*.backup_*
+*Copia*
+*backup_*
+
+# =============================================
+# Scripts de correção / diagnóstico / utilitários avulsos
+# =============================================
+fix_*.py
+fix*.py
+diagnosticar_*.py
+diagnostico_*.py
+corrigir_*.py
+instalar_*.py
+criar_*.py
+criar_*.bak
+localizar_*.py
+verificar_*.py
+validar_*.py
+inspecionar_*.py
+amostra_*.py
+aplicar_*.py
+sincronizar_*.py
+substituir_*.py
+diagnostico_real_*.py
+criar_corrigir_*.py
+
+# =============================================
+# Relatórios / saídas de diagnóstico (txt, json)
+# =============================================
+*.txt
+!INSTRUCOES_PATCH.md
+!requirements.txt
+*.txt.*
+inspecao.txt
+dash_safra_atual.txt
+dash_safra_html_atual.txt
+*.json.validacao
+
+# =============================================
+# Banco de dados
+# =============================================
+database/dumps/
+*.sql
+database/scripts/
+
+# =============================================
+# Executáveis / arquivos binários Windows
+# =============================================
+*.exe
+*.bat
+*.dll
+*.dmg
+*.pkg
+
+# =============================================
+# IDEs / SO
+# =============================================
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
