@@ -9,6 +9,195 @@
 </style>
 <div class="safra-page"><section class="safra-hero"><div><h1>Painel Safra — Recuperação, Meta e Evolução</h1><p>Visão executiva RNO + Cidades · Opção x Inadimplência · GAP volumétrico e percentual vs metas oficiais</p></div><div class="safra-pill">ADM · Desconexão · RNO</div></section><section class="safra-filters"><div class="filtro"><label>ANO</label><select id="ano" multiple></select></div><div class="filtro"><label>MÊS</label><select id="mes" multiple></select></div><div class="filtro"><label>DIA</label><select id="dia" multiple></select></div><div class="filtro"><label>UF</label><select id="uf" multiple></select></div><div class="filtro"><label>CIDADE</label><select id="cidade" multiple></select></div><div class="filtro"><label>SAFRA</label><select id="safra" multiple></select></div><div class="filtro"><label>TIPO</label><select id="tipo" multiple></select></div></section><section class="kpis" id="kpis"></section><section class="grid"><div class="card"><h2>Recuperado x Meta</h2><div id="g_meta" class="chart"></div></div><div class="card"><h2>Ranking de Cidades</h2><div id="g_rank" class="chart"></div></div><div class="card"><h2>Comparativo Safra 1M x 4M x 13M</h2><div id="g_safra" class="chart"></div></div><div class="card"><h2>Opção x Inadimplência</h2><div id="g_tipo" class="chart"></div></div></section><section class="matrix"><h2>Matriz Principal — RNO + Cidades</h2><div id="matriz" class="loading">Carregando matriz...</div></section></div>
 <script>
-const ids=['ano','mes','dia','uf','cidade','safra','tipo'];const choices={};let updating=false;function fmt(n){return(Number(n)||0).toLocaleString('pt-BR')}function pct(n){return(Number(n)||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+'%'}function qs(){const p=new URLSearchParams();ids.forEach(id=>{const v=choices[id]?.getValue(true)||[];if(v.length)p.set(id,v.join(','));});return p.toString()}function setOptions(id,arr){choices[id].clearStore();choices[id].setChoices((arr||[]).map(v=>({value:String(v),label:String(v)})),'value','label',true)}async function loadOptions(){const r=await fetch('/dash/safra/api/options');const j=await r.json();if(!j.ok){document.getElementById('matriz').innerHTML='<div class="loading">'+(j.erro||'Sem opções')+'</div>';return}updating=true;ids.forEach(id=>setOptions(id,j.options[id]||[]));updating=false}function renderKpis(k){const item=(t,v,c='')=>`<div class="kpi"><small>${t}</small><strong class="${c}">${v}</strong></div>`;document.getElementById('kpis').innerHTML=[item('Total Desconectado',fmt(k.desc)),item('Total Recuperado',fmt(k.rec)),item('% Recuperação',pct(k.pct),k.gap_pct>=0?'pos':'neg'),item('Meta',pct(k.meta)),item('GAP vs Meta',`${fmt(k.gap_vol)} · ${pct(k.gap_pct)}`,k.gap_pct>=0?'pos':'neg'),item('Faltam Recuperar',fmt(k.faltam),k.faltam>0?'neg':'pos'),item('Necessário por Dia',fmt(k.necessario_dia)),item('Tendência',k.tendencia,k.gap_pct>=0?'pos':'neg')].join('')}function plotAll(j){Plotly.newPlot('g_meta',[{type:'bar',x:['Recuperado','Meta'],y:[j.kpis.rec,Math.round(j.kpis.desc*j.kpis.meta/100)],marker:{color:['#e60000','#111827']}}],{margin:{t:10,l:45,r:15,b:40}},{displayModeBar:false});const rank=(j.ranking||[]).slice(0,12).reverse();Plotly.newPlot('g_rank',[{type:'bar',orientation:'h',y:rank.map(x=>x.cidade),x:rank.map(x=>x.pct),marker:{color:'#e60000'}}],{margin:{t:10,l:130,r:15,b:35},xaxis:{ticksuffix:'%'}},{displayModeBar:false});Plotly.newPlot('g_safra',[{type:'bar',x:(j.comparativo||[]).map(x=>x.safra),y:(j.comparativo||[]).map(x=>x.pct),marker:{color:'#b91c1c'}}],{margin:{t:10,l:45,r:15,b:40},yaxis:{ticksuffix:'%'}},{displayModeBar:false});Plotly.newPlot('g_tipo',[{type:'bar',x:(j.tipos||[]).map(x=>x.tipo),y:(j.tipos||[]).map(x=>x.pct),marker:{color:['#991b1b','#ef4444']}}],{margin:{t:10,l:45,r:15,b:40},yaxis:{ticksuffix:'%'}},{displayModeBar:false})}function td(v,isPct=false,cls=''){return`<td class="${cls}">${isPct?pct(v):fmt(v)}</td>`}function renderMatrix(rows){let html='';['1 MES','4 MESES','13 MESES'].forEach(safra=>{const rs=(rows||[]).filter(r=>r.safra===safra);html+=`<div class="safra-title">SAFRA ${safra}</div><table><thead><tr><th rowspan="2">Operação</th><th colspan="3">INAD</th><th colspan="3">OPÇÃO</th><th colspan="2">GAP INAD</th><th colspan="2">GAP OPÇÃO</th></tr><tr><th>%</th><th>DESC</th><th>REC</th><th>%</th><th>DESC</th><th>REC</th><th>GAP Vol</th><th>GAP %</th><th>GAP Vol</th><th>GAP %</th></tr></thead><tbody>`;rs.forEach(r=>{html+=`<tr class="${r.operacao==='RNO'?'rno':''}"><td>${r.operacao}</td>${td(r.inad_pct,true)}${td(r.inad_desc)}${td(r.inad_rec)}${td(r.opcao_pct,true)}${td(r.opcao_desc)}${td(r.opcao_rec)}${td(r.inad_gap_vol,false,r.inad_gap_vol>=0?'pos':'neg')}${td(r.inad_gap_pct,true,r.inad_gap_pct>=0?'pos':'neg')}${td(r.opcao_gap_vol,false,r.opcao_gap_vol>=0?'pos':'neg')}${td(r.opcao_gap_pct,true,r.opcao_gap_pct>=0?'pos':'neg')}</tr>`});html+='</tbody></table>'});document.getElementById('matriz').innerHTML=html}async function loadData(){const r=await fetch('/dash/safra/api/data?'+qs());const j=await r.json();if(!j.ok){document.getElementById('matriz').innerHTML='<div class="loading">'+(j.erro||'Sem dados')+'</div>';return}renderKpis(j.kpis);plotAll(j);renderMatrix(j.matriz)}async function init(){ids.forEach(id=>{choices[id]=new Choices('#'+id,{removeItemButton:true,searchEnabled:true,shouldSort:false,itemSelectText:''});document.getElementById(id).addEventListener('change',()=>{if(!updating)loadData()})});await loadOptions();await loadData()}init();
+const ids=['ano','mes','dia','uf','cidade','safra','tipo'];const choices={};let updating=false;function fmt(n){return(Number(n)||0).toLocaleString('pt-BR')}function pct(n){return(Number(n)||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+'%'}function qs(){const p=new URLSearchParams();ids.forEach(id=>{const v=choices[id]?.getValue(true)||[];if(v.length)p.set(id,v.join(','));});return p.toString()}function setOptions(id,arr){choices[id].clearStore();choices[id].setChoices((arr||[]).map(v=>({value:String(v),label:String(v)})),'value','label',true)}async function loadOptions(){const r=await fetch('/dash/safra/api/options');const j=await r.json();if(!j.ok){document.getElementById('matriz').innerHTML='<div class="loading">'+(j.erro||'Sem opções')+'</div>';return}updating=true;ids.forEach(id=>setOptions(id,j.options[id]||[]));updating=false}function renderKpis(k){const item=(t,v,c='')=>`<div class="kpi"><small>${t}</small><strong class="${c}">${v}</strong></div>`;document.getElementById('kpis').innerHTML=[item('Total Desconectado',fmt(k.desc)),item('Total Recuperado',fmt(k.rec)),item('% Recuperação',pct(k.pct),k.gap_pct>=0?'pos':'neg'),item('Meta',pct(k.meta)),item('GAP vs Meta',`${fmt(k.gap_vol)} · ${pct(k.gap_pct)}`,k.gap_pct>=0?'pos':'neg'),item('Faltam Recuperar',fmt(k.faltam),k.faltam>0?'neg':'pos'),item('Necessário por Dia',fmt(k.necessario_dia)),item('Tendência',k.tendencia,k.gap_pct>=0?'pos':'neg')].join('')}
+function plotAll(j){
+
+    Plotly.newPlot(
+        'g_meta',
+        [{
+            type:'bar',
+
+            x:[
+                'Recuperado',
+                'Meta'
+            ],
+
+            y:[
+                j.kpis.rec,
+                Math.round(
+                    j.kpis.desc *
+                    j.kpis.meta / 100
+                )
+            ],
+
+            text:[
+                fmt(j.kpis.rec),
+                fmt(
+                    Math.round(
+                        j.kpis.desc *
+                        j.kpis.meta / 100
+                    )
+                )
+            ],
+
+            textposition:'outside',
+
+            marker:{
+                color:[
+                    '#e60000',
+                    '#111827'
+                ]
+            }
+        }],
+        {
+            height:220,
+
+            margin:{
+                t:40,
+                l:45,
+                r:15,
+                b:40
+            }
+        },
+        {
+            displayModeBar:false
+        }
+    );
+
+    const rank =
+        (j.ranking || [])
+        .slice(0,10)
+        .reverse();
+
+    Plotly.newPlot(
+        'g_rank',
+        [{
+            type:'bar',
+
+            orientation:'h',
+
+            y:
+                rank.map(
+                    x => x.cidade
+                ),
+
+            x:
+                rank.map(
+                    x => x.pct
+                ),
+
+            text:
+                rank.map(
+                    x => x.pct.toFixed(1)+'%'
+                ),
+
+            textposition:'outside',
+
+            marker:{
+                color:'#e60000'
+            }
+        }],
+        {
+            height:220,
+
+            margin:{
+                t:20,
+                l:140,
+                r:20,
+                b:20
+            },
+
+            xaxis:{
+                range:[0,100],
+                ticksuffix:'%'
+            }
+        },
+        {
+            displayModeBar:false
+        }
+    );
+
+    renderExecutiveCards(j);
+}
+
+function renderExecutiveCards(j){
+
+    const ordem = {
+        '1 MES':1,
+        '4 MESES':2,
+        '13 MESES':3
+    };
+
+    const classes = {
+        '1 MES':'safra1',
+        '4 MESES':'safra4',
+        '13 MESES':'safra13'
+    };
+
+    const cardsSafra =
+        (j.comparativo || [])
+        .sort(
+            (a,b)=>
+                ordem[a.safra]-ordem[b.safra]
+        );
+
+    document.getElementById(
+        'g_safra'
+    ).innerHTML = `
+        <div class="exec-cards">
+
+        ${cardsSafra.map(x=>`
+
+            <div class="exec-card ${classes[x.safra]}">
+
+                <div class="titulo">
+
+                    ${x.safra}
+
+                </div>
+
+                <div class="valor">
+
+                    ${x.pct.toFixed(1)}%
+
+                </div>
+
+            </div>
+
+        `).join('')}
+
+        </div>
+    `;
+
+    document.getElementById(
+        'g_tipo'
+    ).innerHTML = `
+        <div class="exec-cards-2">
+
+        ${(j.tipos || []).map(x=>`
+
+            <div class="exec-card">
+
+                <div class="titulo">
+
+                    ${x.tipo}
+
+                </div>
+
+                <div class="valor">
+
+                    ${x.pct.toFixed(1)}%
+
+                </div>
+
+            </div>
+
+        `).join('')}
+
+        </div>
+    `;
+}
+
+function td(v,isPct=false,cls=''){return`<td class="${cls}">${isPct?pct(v):fmt(v)}</td>`}function renderMatrix(rows){let html='';['1 MES','4 MESES','13 MESES'].forEach(safra=>{const rs=(rows||[]).filter(r=>r.safra===safra);html+=`<div class="safra-title">SAFRA ${safra}</div><table><thead><tr><th rowspan="2">Operação</th><th colspan="3">INAD</th><th colspan="3">OPÇÃO</th><th colspan="2">GAP INAD</th><th colspan="2">GAP OPÇÃO</th></tr><tr><th>%</th><th>DESC</th><th>REC</th><th>%</th><th>DESC</th><th>REC</th><th>GAP Vol</th><th>GAP %</th><th>GAP Vol</th><th>GAP %</th></tr></thead><tbody>`;rs.forEach(r=>{html+=`<tr class="${r.operacao==='RNO'?'rno':''}"><td>${r.operacao}</td>${td(r.inad_pct,true)}${td(r.inad_desc)}${td(r.inad_rec)}${td(r.opcao_pct,true)}${td(r.opcao_desc)}${td(r.opcao_rec)}${td(r.inad_gap_vol,false,r.inad_gap_vol>=0?'pos':'neg')}${td(r.inad_gap_pct,true,r.inad_gap_pct>=0?'pos':'neg')}${td(r.opcao_gap_vol,false,r.opcao_gap_vol>=0?'pos':'neg')}${td(r.opcao_gap_pct,true,r.opcao_gap_pct>=0?'pos':'neg')}</tr>`});html+='</tbody></table>'});document.getElementById('matriz').innerHTML=html}async function loadData(){const r=await fetch('/dash/safra/api/data?'+qs());const j=await r.json();if(!j.ok){document.getElementById('matriz').innerHTML='<div class="loading">'+(j.erro||'Sem dados')+'</div>';return}renderKpis(j.kpis);plotAll(j);renderMatrix(j.matriz)}async function init(){ids.forEach(id=>{choices[id]=new Choices('#'+id,{removeItemButton:true,searchEnabled:true,shouldSort:false,itemSelectText:''});document.getElementById(id).addEventListener('change',()=>{if(!updating)loadData()})});await loadOptions();await loadData()}init();
 </script>
 {% endblock %}

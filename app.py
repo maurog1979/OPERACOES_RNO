@@ -4,7 +4,7 @@ from routes.compat_redirects import compat_redirects_bp
 from flask import Flask, render_template, abort, redirect, url_for
 from config import Config
 from data.areas import AREAS, get_area, get_setor
-from areas.adm.desconexao.dash_safra import dash_safra_bp
+from areas.adm.desconexao.dash_safra_v8 import bp as dash_safra_bp
 
 
 def create_app():
