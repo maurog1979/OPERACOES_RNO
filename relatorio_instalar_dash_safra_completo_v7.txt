@@ -1,9 +1,0 @@
-RELATÓRIO — INSTALAR DASH SAFRA COMPLETO V7
-Data/hora: 2026-06-26 11:46:05
-Raiz: C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO
-dash_safra.py: C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO\areas\adm\desconexao\dash_safra.py
-dash_safra.html: C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO\areas\adm\desconexao\templates\dash_safra.html
-Banco: safra | host localhost | porta 3306 | usuário root
-APIs: /dash/safra/api/diagnostico, /dash/safra/api/debug_colunas, /dash/safra/api/options, /dash/safra/api/data
-Backups: C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO\areas\adm\desconexao\dash_safra.py.bak_v7_20260626_114605, C:\Users\n5996917\OneDrive - Claro SA\INTRANET\OPERACOES_RNO\areas\adm\desconexao\templates\dash_safra.html.bak_v7_20260626_114605
-Após executar: reiniciar Flask e testar /dash/safra/api/debug_colunas e /dash/safra/api/data

@@ -1,2 +1,0 @@
-from areas.adm.desconexao.dash_safra import dash_safra_bp
-app.register_blueprint(dash_safra_bp)
