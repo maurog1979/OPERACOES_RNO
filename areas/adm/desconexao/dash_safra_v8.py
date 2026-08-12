@@ -138,7 +138,7 @@ def build_where(filters, tabela):
 def index():
 
     return render_template(
-        "dash_safra.html"
+        "dash_safra_v9_visual.html"
     )
 
 # =====================================================
