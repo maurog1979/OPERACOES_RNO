@@ -157,6 +157,8 @@
     .ico-log { background: linear-gradient(135deg, #7B1FA2, #4A148C); }
     .ico-parc { background: linear-gradient(135deg, #2E7D32, #14532D); }
     .ico-ret { background: linear-gradient(135deg, #16A34A, #15803D); }
+    .ico-safra { background: linear-gradient(135deg, #E60000, #B71C1C); }
+    .ico-analiticos { background: linear-gradient(135deg, #6B7280, #374151); }
 
     .hub-card-title {
         margin: 0 0 7px;
@@ -190,6 +192,12 @@
         font-size: 0.86rem;
     }
 
+    .hub-status-em-breve {
+        color: #F59E0B;
+        font-weight: 900;
+        font-size: 0.86rem;
+    }
+
     .hub-pill {
         display: inline-flex;
         align-items: center;
@@ -202,6 +210,33 @@
         font-weight: 950;
         font-size: 0.82rem;
         box-shadow: 0 10px 18px rgba(230,0,0,0.22);
+    }
+
+    .hub-pill-em-breve {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 96px;
+        border-radius: 999px;
+        padding: 9px 14px;
+        background: #E5E7EB;
+        color: #6B7280;
+        font-weight: 950;
+        font-size: 0.82rem;
+    }
+
+    .hub-card-novo {
+        border-left: 4px solid #E60000;
+    }
+
+    .hub-card-futuro {
+        opacity: 0.85;
+        cursor: not-allowed;
+    }
+
+    .hub-card-futuro:hover {
+        transform: translateY(-2px);
+        border-color: #D1D5DB;
     }
 
     .hub-note {
@@ -365,6 +400,17 @@
     color: #6B7280 !important;
 }
 
+/* Novos ícones */
+.ico-safra,
+.icon-safra {
+    background: linear-gradient(145deg, #E30613, #D00000) !important;
+}
+
+.ico-analiticos,
+.icon-analiticos {
+    background: linear-gradient(145deg, #6B7280, #4B5563) !important;
+}
+
 @media (max-width: 1180px) {
     .hub-grid,
     .hub-grid-old {
@@ -398,12 +444,13 @@
         </div>
 
         <div class="hub-actions">
-            <a class="hub-btn" href="/dash/retirada/">← Voltar ADM</a>
+            <a class="hub-btn" href="/area/adm">← Voltar ADM</a>
             <a class="hub-btn" href="/">Página inicial</a>
         </div>
     </section>
 
     <section class="hub-grid">
+        <!-- 1. Executivo -->
         <a class="hub-card" href="/dash/executivo/">
             <div class="hub-icon ico-exec">★</div>
             <h2 class="hub-card-title">Executivo</h2>
@@ -414,6 +461,7 @@
             </div>
         </a>
 
+        <!-- 2. Backlog -->
         <a class="hub-card" href="/dash/backlog/">
             <div class="hub-icon ico-backlog">☑</div>
             <h2 class="hub-card-title">Backlog</h2>
@@ -424,6 +472,7 @@
             </div>
         </a>
 
+        <!-- 3. Quebra de Agenda -->
         <a class="hub-card" href="/dash/quebra/">
             <div class="hub-icon ico-quebra">▣</div>
             <h2 class="hub-card-title">Quebra de Agenda</h2>
@@ -434,6 +483,7 @@
             </div>
         </a>
 
+        <!-- 4. Log e Reincidência -->
         <a class="hub-card" href="/dash/log/">
             <div class="hub-icon ico-log">↻</div>
             <h2 class="hub-card-title">Log e Reincidência</h2>
@@ -444,6 +494,7 @@
             </div>
         </a>
 
+        <!-- 5. Parceiras -->
         <a class="hub-card" href="/dash/parceiras/">
             <div class="hub-icon ico-parc">◆</div>
             <h2 class="hub-card-title">Parceiras</h2>
@@ -454,6 +505,7 @@
             </div>
         </a>
 
+        <!-- 6. Retirada de Equipamentos -->
         <a class="hub-card" href="/dash/retirada/">
             <div class="hub-icon ico-ret">▥</div>
             <h2 class="hub-card-title">Retirada de Equipamentos</h2>
@@ -463,6 +515,28 @@
                 <span class="hub-pill">ACESSAR</span>
             </div>
         </a>
+
+        <!-- 7. PAINEL SAFRA (NOVO) -->
+        <a class="hub-card hub-card-novo" href="/dash/safra/">
+            <div class="hub-icon ico-safra">🌾</div>
+            <h2 class="hub-card-title">Painel Safra</h2>
+            <p class="hub-card-desc">Acompanhamento de safras (1M, 4M, 13M) com metas, GAPs e evolução diária.</p>
+            <div class="hub-card-footer">
+                <span class="hub-status">Disponível</span>
+                <span class="hub-pill">ACESSAR</span>
+            </div>
+        </a>
+
+        <!-- 8. ANALÍTICOS (FUTURO) -->
+        <div class="hub-card hub-card-futuro" style="cursor: not-allowed;">
+            <div class="hub-icon ico-analiticos">🔬</div>
+            <h2 class="hub-card-title">Analíticos</h2>
+            <p class="hub-card-desc">Análises avançadas, correlações e insights profundos dos dados de safra.</p>
+            <div class="hub-card-footer">
+                <span class="hub-status-em-breve">Em breve</span>
+                <span class="hub-pill-em-breve">EM BREVE</span>
+            </div>
+        </div>
     </section>
 
     <div class="hub-note">Portal Operações RNO · ADM · Desconexão</div>
