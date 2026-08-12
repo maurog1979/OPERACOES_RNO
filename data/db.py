@@ -11,7 +11,9 @@ import time
 import pandas as pd
 from sqlalchemy import create_engine
 
-DB_URL = "mysql+pymysql://root:@localhost:3306/safra"
+from config import Config
+
+DB_URL = Config.db_url()
 
 # ============================================================
 # Cache compartilhado: {nome_tabela: {"df": DataFrame, "ts": timestamp, "load_time": secs}}

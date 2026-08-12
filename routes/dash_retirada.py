@@ -16,6 +16,7 @@ Rotas:
 from functools import wraps
 from flask import Blueprint, render_template, jsonify, request, current_app, redirect
 from sqlalchemy import create_engine, text
+from config import Config
 import pandas as pd
 import numpy as np
 import unicodedata
@@ -35,7 +36,7 @@ dash_retirada_bp = Blueprint(
 )
 
 
-DB = "mysql+pymysql://root:@localhost:3306/safra"
+DB = Config.db_url()
 
 _DF_CACHE = None
 _COLUMNS_CACHE = None

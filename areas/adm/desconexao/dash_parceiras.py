@@ -10,6 +10,7 @@ import plotly.io as pio
 from sqlalchemy import create_engine, text
 from flask import Blueprint, render_template, request, jsonify
 
+from config import Config
 from data.db import load_table
 
 bp = Blueprint(
@@ -36,7 +37,7 @@ _DF_CACHE = {"df": None, "diag": {}}  # forcado reload v6
 
 
 def get_engine():
-    return create_engine("mysql+pymysql://root:@localhost:3306/safra")
+    return create_engine(Config.db_url())
 
 
 def _load_cidades_uf_sql():

@@ -7,6 +7,8 @@ import pymysql
 import traceback
 import logging
 
+from config import Config
+
 logging.basicConfig(level=logging.INFO)
 
 logger = logging.getLogger(__name__)
@@ -21,14 +23,7 @@ bp = Blueprint(
 # BANCO
 # =====================================================
 
-DB_CONFIG = {
-    "host": "localhost",
-    "user": "root",
-    "password": "",
-    "database": "safra",
-    "port": 3306,
-    "charset": "utf8mb4"
-}
+DB_CONFIG = Config.db_config_pymysql()
 
 # =====================================================
 # MYSQL
