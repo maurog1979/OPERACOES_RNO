@@ -71,6 +71,15 @@ inspecao.txt
 dash_safra_atual.txt
 dash_safra_html_atual.txt
 *.json.validacao
+validacao_*.json
+
+# =============================================
+# Artefatos residuais diversos
+# =============================================
+*.com_erro*
+python
+# Sub-repo git aninhado (mantido fora do versionamento principal)
+portal_operacoes_rno/
 
 # =============================================
 # Banco de dados

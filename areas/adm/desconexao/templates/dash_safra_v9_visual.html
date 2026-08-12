@@ -2,146 +2,8 @@
 {% extends "base.html" %}
 {% block content %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css">
-<script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js">
-
-function renderExecutiveCards(j){
-
-    const ordem = {
-        '1 MES':1,
-        '4 MESES':2,
-        '13 MESES':3
-    };
-
-    const safras = (j.comparativo || [])
-        .sort(
-            (a,b)=>
-            ordem[a.safra] -
-            ordem[b.safra]
-        );
-
-    const classes = {
-        '1 MES':'safra1',
-        '4 MESES':'safra4',
-        '13 MESES':'safra13'
-    };
-
-    document.getElementById(
-        'cards_safra'
-    ).innerHTML = safras.map(x => `
-
-        <div class="exec-card ${classes[x.safra]}">
-
-            <div class="titulo">
-
-                ${x.safra}
-
-            </div>
-
-            <div class="valor">
-
-                ${x.pct.toFixed(1)}%
-
-            </div>
-
-        </div>
-
-    `).join('');
-
-    document.getElementById(
-        'cards_tipo'
-    ).innerHTML = (j.tipos || []).map(x => `
-
-        <div class="exec-card">
-
-            <div class="titulo">
-
-                ${x.tipo}
-
-            </div>
-
-            <div class="valor">
-
-                ${x.pct.toFixed(1)}%
-
-            </div>
-
-        </div>
-
-    `).join('');
-}
-
-
-</script>
-<script src="https://cdn.plot.ly/plotly-2.35.2.min.js">
-
-function renderExecutiveCards(j){
-
-    const ordem = {
-        '1 MES':1,
-        '4 MESES':2,
-        '13 MESES':3
-    };
-
-    const safras = (j.comparativo || [])
-        .sort(
-            (a,b)=>
-            ordem[a.safra] -
-            ordem[b.safra]
-        );
-
-    const classes = {
-        '1 MES':'safra1',
-        '4 MESES':'safra4',
-        '13 MESES':'safra13'
-    };
-
-    document.getElementById(
-        'cards_safra'
-    ).innerHTML = safras.map(x => `
-
-        <div class="exec-card ${classes[x.safra]}">
-
-            <div class="titulo">
-
-                ${x.safra}
-
-            </div>
-
-            <div class="valor">
-
-                ${x.pct.toFixed(1)}%
-
-            </div>
-
-        </div>
-
-    `).join('');
-
-    document.getElementById(
-        'cards_tipo'
-    ).innerHTML = (j.tipos || []).map(x => `
-
-        <div class="exec-card">
-
-            <div class="titulo">
-
-                ${x.tipo}
-
-            </div>
-
-            <div class="valor">
-
-                ${x.pct.toFixed(1)}%
-
-            </div>
-
-        </div>
-
-    `).join('');
-}
-
-
-</script>
+<script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 
 <style>
 
@@ -287,75 +149,6 @@ function renderExecutiveCards(j){
 
 <style>
 
-.exec-cards{
-
-    display:grid;
-
-    grid-template-columns:
-        repeat(3,1fr);
-
-    gap:16px;
-
-    margin-top:10px;
-}
-
-.exec-card{
-
-    border-radius:18px;
-
-    border:1px solid #d1d5db;
-
-    padding:18px;
-
-    text-align:center;
-
-    transition:.2s;
-
-    box-shadow:
-        0 2px 8px rgba(0,0,0,.04);
-}
-
-.exec-card:hover{
-    transform:translateY(-2px);
-}
-
-.exec-card .titulo{
-
-    font-size:15px;
-
-    font-weight:900;
-
-    margin-bottom:10px;
-}
-
-.exec-card .valor{
-
-    font-size:34px;
-
-    font-weight:900;
-}
-
-.safra1{
-
-    background:#fff1f2;
-
-    border-left:8px solid #dc2626;
-}
-
-.safra4{
-
-    background:#fff7ed;
-
-    border-left:8px solid #f97316;
-}
-
-.safra13{
-
-    background:#f0fdf4;
-
-    border-left:8px solid #16a34a;
-}
-
 .card{
 
     border:1px solid #d1d5db !important;
@@ -380,9 +173,9 @@ function renderExecutiveCards(j){
 </style>
 
 <div class="safra-page"><section class="safra-hero"><div><h1>Painel Safra — Recuperação, Meta e Evolução</h1><p>Visão executiva RNO + Cidades · Opção x Inadimplência · GAP volumétrico e percentual vs metas oficiais</p></div><div class="safra-pill">ADM · Desconexão · RNO</div></section><section class="safra-filters"><div class="filtro"><label>ANO</label><select id="ano" multiple></select></div><div class="filtro"><label>MÊS</label><select id="mes" multiple></select></div><div class="filtro"><label>DIA</label><select id="dia" multiple></select></div><div class="filtro"><label>UF</label><select id="uf" multiple></select></div><div class="filtro"><label>CIDADE</label><select id="cidade" multiple></select></div><div class="filtro"><label>SAFRA</label><select id="safra" multiple></select></div><div class="filtro"><label>TIPO</label><select id="tipo" multiple></select></div></section><section class="kpis" id="kpis"></section><section class="grid"><div class="card"><h2>Recuperado x Meta</h2><div id="g_meta" class="chart"></div></div><div class="card"><h2>Ranking de Cidades</h2><div id="g_rank" class="chart"></div></div><div class="card"><h2>Comparativo Safra 1M x 4M x 13M</h2>
-<div id="cards_safra" class="exec-cards"></div>
+<div id="g_safra" class="chart"></div>
 </div><div class="card"><h2>Opção x Inadimplência</h2>
-<div id="cards_tipo" class="exec-cards"></div>
+<div id="g_tipo" class="chart"></div>
 </div></section><section class="matrix"><h2>Matriz Principal — RNO + Cidades</h2><div id="matriz" class="loading">Carregando matriz...</div></section></div>
 <script>
 const ids=['ano','mes','dia','uf','cidade','safra','tipo'];const choices={};let updating=false;function fmt(n){return(Number(n)||0).toLocaleString('pt-BR')}function pct(n){return(Number(n)||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+'%'}function qs(){const p=new URLSearchParams();ids.forEach(id=>{const v=choices[id]?.getValue(true)||[];if(v.length)p.set(id,v.join(','));});return p.toString()}function setOptions(id,arr){choices[id].clearStore();choices[id].setChoices((arr||[]).map(v=>({value:String(v),label:String(v)})),'value','label',true)}async function loadOptions(){const r=await fetch('/dash/safra/api/options');const j=await r.json();if(!j.ok){document.getElementById('matriz').innerHTML='<div class="loading">'+(j.erro||'Sem opções')+'</div>';return}updating=true;ids.forEach(id=>setOptions(id,j.options[id]||[]));updating=false}function renderKpis(k){const item=(t,v,c='')=>`<div class="kpi"><small>${t}</small><strong class="${c}">${v}</strong></div>`;document.getElementById('kpis').innerHTML=[item('Total Desconectado',fmt(k.desc)),item('Total Recuperado',fmt(k.rec)),item('% Recuperação',pct(k.pct),k.gap_pct>=0?'pos':'neg'),item('Meta',pct(k.meta)),item('GAP vs Meta',`${fmt(k.gap_vol)} · ${pct(k.gap_pct)}`,k.gap_pct>=0?'pos':'neg'),item('Faltam Recuperar',fmt(k.faltam),k.faltam>0?'neg':'pos'),item('Necessário por Dia',fmt(k.necessario_dia)),item('Tendência',k.tendencia,k.gap_pct>=0?'pos':'neg')].join('')}
@@ -599,75 +392,7 @@ function plotAll(j){
 
 function td(v,isPct=false,cls=''){return`<td class="${cls}">${isPct?pct(v):fmt(v)}</td>`}function renderMatrix(rows){let html='';['1 MES','4 MESES','13 MESES'].forEach(safra=>{const rs=(rows||[]).filter(r=>r.safra===safra);html+=`<div class="safra-title">SAFRA ${safra}</div><table><thead><tr><th rowspan="2">Operação</th><th colspan="3">INAD</th><th colspan="3">OPÇÃO</th><th colspan="2">GAP INAD</th><th colspan="2">GAP OPÇÃO</th></tr><tr><th>%</th><th>DESC</th><th>REC</th><th>%</th><th>DESC</th><th>REC</th><th>GAP Vol</th><th>GAP %</th><th>GAP Vol</th><th>GAP %</th></tr></thead><tbody>`;rs.forEach(r=>{html+=`<tr class="${r.operacao==='RNO'?'rno':''}"><td>${r.operacao}</td>${td(r.inad_pct,true)}${td(r.inad_desc)}${td(r.inad_rec)}${td(r.opcao_pct,true)}${td(r.opcao_desc)}${td(r.opcao_rec)}${td(r.inad_gap_vol,false,r.inad_gap_vol>=0?'pos':'neg')}${td(r.inad_gap_pct,true,r.inad_gap_pct>=0?'pos':'neg')}${td(r.opcao_gap_vol,false,r.opcao_gap_vol>=0?'pos':'neg')}${td(r.opcao_gap_pct,true,r.opcao_gap_pct>=0?'pos':'neg')}</tr>`});html+='</tbody></table>'});document.getElementById('matriz').innerHTML=html}async function loadData(){const r=await fetch('/dash/safra/api/data?'+qs());const j=await r.json();if(!j.ok){document.getElementById('matriz').innerHTML='<div class="loading">'+(j.erro||'Sem dados')+'</div>';return}renderKpis(j.kpis);plotAll(j);
 renderMatrix(j.matriz);
-renderExecutiveCards(j);
 }async function init(){ids.forEach(id=>{choices[id]=new Choices('#'+id,{removeItemButton:true,searchEnabled:true,shouldSort:false,itemSelectText:''});document.getElementById(id).addEventListener('change',()=>{if(!updating)loadData()})});await loadOptions();await loadData()}init();
-
-
-function renderExecutiveCards(j){
-
-    const ordem = {
-        '1 MES':1,
-        '4 MESES':2,
-        '13 MESES':3
-    };
-
-    const safras = (j.comparativo || [])
-        .sort(
-            (a,b)=>
-            ordem[a.safra] -
-            ordem[b.safra]
-        );
-
-    const classes = {
-        '1 MES':'safra1',
-        '4 MESES':'safra4',
-        '13 MESES':'safra13'
-    };
-
-    document.getElementById(
-        'cards_safra'
-    ).innerHTML = safras.map(x => `
-
-        <div class="exec-card ${classes[x.safra]}">
-
-            <div class="titulo">
-
-                ${x.safra}
-
-            </div>
-
-            <div class="valor">
-
-                ${x.pct.toFixed(1)}%
-
-            </div>
-
-        </div>
-
-    `).join('');
-
-    document.getElementById(
-        'cards_tipo'
-    ).innerHTML = (j.tipos || []).map(x => `
-
-        <div class="exec-card">
-
-            <div class="titulo">
-
-                ${x.tipo}
-
-            </div>
-
-            <div class="valor">
-
-                ${x.pct.toFixed(1)}%
-
-            </div>
-
-        </div>
-
-    `).join('');
-}
 
 
 </script>
