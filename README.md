@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Portal Operações RNO
 
 Plataforma de inteligência operacional da Regional Norte da Claro.
@@ -26,6 +25,26 @@ Acesse: http://localhost:5000
 | `/area/<area>` | Página da área (setores ou construção) |
 | `/area/<area>/<setor>` | Setor específico |
 | `/area/<area>/em-construcao` | Placeholder |
+| `/dash/executivo/` | Dashboard Executivo (Desconexão) |
+| `/dash/log/` | Dashboard Log (Desconexão) |
+| `/dash/parceiras/` | Dashboard Parceiras (Desconexão) |
+| `/dash/backlog/` | Dashboard Backlog (Desconexão) |
+| `/dash/quebra/` | Dashboard Quebra (Desconexão) |
+| `/dash/retirada/` | Dashboard Retirada |
+| `/dash/safra/` | Painel Safra |
+
+## Configuração de Banco
+
+As credenciais do MySQL são lidas de variáveis de ambiente (com fallback para dev):
+
+```
+MYSQL_HOST=localhost
+MYSQL_PORT=3306
+MYSQL_USER=root
+MYSQL_PASSWORD=
+MYSQL_DATABASE=safra
+SECRET_KEY=...
+```
 
 ## 8 Áreas
 
@@ -45,6 +64,3 @@ Acesse: http://localhost:5000
 - [ ] **FASE 3**: Autenticação (Flask-Login)
 - [ ] **FASE 4**: Hospedagem VPS + domínio operacoesrno.com.br
 - [ ] **FASE 5**: Arquivar PORTAL_DESCONEXAO antigo
-=======
-# OPERACOES_RNO
->>>>>>> ff1d57eb9151ffc7a7d679a918fce93a2260b2cf

@@ -1,5 +1,3 @@
-from routes.dash_retirada import dash_retirada_bp
-from routes.compat_redirects import compat_redirects_bp
 """Flask app factory do Portal Operações RNO."""
 from flask import Flask, render_template, abort, redirect, url_for
 from config import Config
@@ -89,7 +87,7 @@ def create_app():
     # =========================================================
     # HUB DESCONEXÃO (6 dashboards)
     # =========================================================
-    @app.route("/area/area/area/adm/desconexao//")
+    @app.route("/area/adm/desconexao/")
     def hub_desconexao():
         return render_template("hub_desconexao.html")
 
@@ -153,7 +151,19 @@ def create_app():
 
 
 
-    app.register_blueprint(dash_retirada_bp)
-    app.register_blueprint(compat_redirects_bp)
+    try:
+        from routes.dash_retirada import dash_retirada_bp
+        app.register_blueprint(dash_retirada_bp)
+        print("[APP] Blueprint dash_retirada registrado em /dash/retirada/")
+    except Exception as e:
+        print(f"[APP] AVISO: nao foi possivel registrar dash_retirada_bp: {e}")
+
+    try:
+        from routes.compat_redirects import compat_redirects_bp
+        app.register_blueprint(compat_redirects_bp)
+        print("[APP] Blueprint compat_redirects registrado")
+    except Exception as e:
+        print(f"[APP] AVISO: nao foi possivel registrar compat_redirects_bp: {e}")
+
     app.register_blueprint(dash_safra_bp)
     return app
