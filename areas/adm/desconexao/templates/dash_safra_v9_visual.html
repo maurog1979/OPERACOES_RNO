@@ -1,399 +1,415 @@
-
 {% extends "base.html" %}
 {% block content %}
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css">
-<script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+
+<div id="loading-overlay">
+  <div class="spinner"></div>
+  <p>Carregando dados...</p>
+</div>
+
+
+<!-- Bootstrap 5 + Choices.js -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js@10.2.0/public/assets/styles/choices.min.css">
+
+<style>
+  :root {
+    --claro: #E60000;
+    --red: #E60000;
+    --red-dark: #B71C1C;
+    --blue: #1565C0;
+    --green: #2E7D32;
+    --orange: #F57C00;
+    --yellow: #F9A825;
+    --inad: #B91C1C;
+    --opcao: #F04444;
+  }
+
+  .safra-wrap { padding: 1rem 1.5rem 2rem; background:#F5F6FA; min-height:100vh; }
+  .safra-title-bar {
+    display:flex; justify-content:space-between; align-items:center;
+    background:linear-gradient(90deg,#E60000,#B71C1C); color:#fff;
+    padding:.8rem 1.2rem; border-radius:.6rem; margin-bottom:1rem;
+    font-weight:600;
+  }
+  .safra-title-bar a { color:#fff; background:rgba(255,255,255,.15);
+    padding:.4rem .8rem; border-radius:.4rem; text-decoration:none; font-size:.9rem; }
+  .safra-title-bar a:hover { background:rgba(255,255,255,.3); }
+  .filter-bar { background:#fff; padding:1rem; border-radius:.6rem;
+                box-shadow:0 1px 3px rgba(0,0,0,.06); margin-bottom:1rem; }
+  .filter-bar label { font-size:.75rem; font-weight:600; color:#555;
+                      text-transform:uppercase; margin-bottom:.3rem; display:block; }
+
+  /* ===== Choices.js — estilo Claro (tags vermelhas) ===== */
+  .choices { margin-bottom: 0 !important; font-size: .85rem; }
+  .choices__inner {
+    min-height: 38px !important;
+    padding: 4px 7.5px 0 7.5px !important;
+    background:#fff !important;
+    border:1px solid #ced4da !important;
+    border-radius:.375rem !important;
+    font-size:.85rem !important;
+  }
+  .choices[data-type*="select-multiple"] .choices__button {
+    border-left:1px solid rgba(255,255,255,.5) !important;
+    margin: 0 -4px 0 8px !important;
+  }
+  .choices__list--multiple .choices__item {
+    background-color:#E60000 !important;
+    border:1px solid #B71C1C !important;
+    color:#fff !important;
+    font-weight:500 !important;
+    border-radius:.3rem !important;
+    padding:3px 10px !important;
+    margin:2px 4px 2px 0 !important;
+  }
+  .choices__list--dropdown .choices__item--selectable.is-highlighted {
+    background-color:#FCE4EC !important;
+    color:#B71C1C !important;
+  }
+  .is-focused .choices__inner, .is-open .choices__inner {
+    border-color:#E60000 !important;
+    box-shadow:0 0 0 .15rem rgba(230,0,0,.15) !important;
+  }
+  .choices__placeholder { opacity:.6 !important; color:#999 !important; }
+
+  .kpi-card { border:none; border-left:4px solid #1565C0; transition:transform .15s; }
+  .kpi-card:hover { transform:translateY(-2px); }
+  .kpi-card .kpi-val { font-size:1.15rem; font-weight:800; }
+  .kpi-card .kpi-val.pos { color: var(--green); }
+  .kpi-card .kpi-val.neg { color: var(--red-dark); }
+  .section-header { background:linear-gradient(90deg,#E60000,#B71C1C); color:#fff; padding:.5rem 1rem;
+                    border-radius:.4rem; font-weight:600; font-size:.85rem;
+                    letter-spacing:.05em; margin:1rem 0 .5rem; }
+  .graph-card { background:#fff; border-radius:.6rem; padding:.5rem .75rem;
+                box-shadow:0 1px 3px rgba(0,0,0,.06); }
+  .graph-card h2 { font-size:.95rem; font-weight:700; margin:0 0 .25rem 0; color:#333; }
+  #btn-limpar { font-size:.8rem; }
+
+  /* ===== Loading spinner ===== */
+  #loading-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(255,255,255,0.85); z-index: 9999;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+  }
+  #loading-overlay .spinner {
+    width: 60px; height: 60px;
+    border: 6px solid #E60000; border-top-color: transparent;
+    border-radius: 50%; animation: spin 0.8s linear infinite;
+  }
+  #loading-overlay p {
+    margin-top: 1rem; color: #B71C1C; font-weight: 600;
+    font-size: 1.1rem;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ===== Matriz ===== */
+  .matrix-holder { overflow-x:auto; }
+  .matrix-holder table { border-collapse:collapse; width:100%; font-size:.85rem; }
+  .matrix-holder thead th { background:#1f2937; color:#fff; position:sticky; top:0; z-index:2;
+                            padding:6px 8px; font-size:.8rem; white-space:nowrap; text-align:center; }
+  .matrix-holder tbody td { padding:4px 8px; white-space:nowrap; text-align:center; border:1px solid #edf0f3; }
+  .matrix-holder tbody tr:nth-child(even) { background:#f7f9fb; }
+  .matrix-holder tbody tr.rno { background:#fff2f2; font-weight:800; }
+  .matrix-holder td.pos { color: var(--green); font-weight:700; }
+  .matrix-holder td.neg { color: var(--red-dark); font-weight:700; }
+  .safra-title { font-size:.85rem; font-weight:800; background:#eef0f3; padding:4px 10px;
+                 border-radius:6px; margin:10px 0 4px 0; display:inline-block; }
+  .matrix-card { color:#333; }
+</style>
+
+<div class="safra-wrap">
+
+  <div class="safra-title-bar">
+    <div><i class="bi bi-airplane-engines-fill"></i> DESCONEXAO RNO --- SAFRA</div>
+    <a href="/area/adm/desconexao/"><i class="bi bi-arrow-left"></i> Voltar ao Hub</a>
+  </div>
+
+  <div class="filter-bar">
+    <div class="row g-2">
+      <div class="col-md-2 col-6"><label>ANO</label>
+        <select id="f-ano" multiple data-ph="Todos"></select></div>
+      <div class="col-md-2 col-6"><label>MES</label>
+        <select id="f-mes" multiple data-ph="Todos"></select></div>
+      <div class="col-md-2 col-6"><label>DIA</label>
+        <select id="f-dia" multiple data-ph="Todos"></select></div>
+      <div class="col-md-2 col-6"><label>UF</label>
+        <select id="f-uf" multiple data-ph="Todas"></select></div>
+      <div class="col-md-2 col-6"><label>CIDADE</label>
+        <select id="f-cidade" multiple data-ph="Todas"></select></div>
+      <div class="col-md-2 col-6"><label>SAFRA</label>
+        <select id="f-safra" multiple data-ph="Todas"></select></div>
+      <div class="col-md-2 col-6"><label>TIPO DESCONEXAO</label>
+        <select id="f-tipo" multiple data-ph="Todos"></select></div>
+    </div>
+    <div class="text-end mt-2">
+      <button id="btn-limpar" class="btn btn-outline-danger btn-sm">
+        <i class="bi bi-eraser"></i> Limpar filtros
+      </button>
+      <span id="status" class="ms-2 small text-muted"></span>
+    </div>
+  </div>
+
+  <div id="kpis" class="row g-2 mb-2"></div>
+
+  <div class="section-header">METAS, EVOLUCAO E CLASSIFICACAO</div>
+  <div class="row g-2">
+    <div class="col-lg-6 col-12"><div class="graph-card"><h2>Recuperado x Meta</h2><div id="g_meta"></div></div></div>
+    <div class="col-lg-6 col-12"><div class="graph-card"><h2>Ranking de Cidades</h2><div id="g_rank"></div></div></div>
+  </div>
+
+  <div class="section-header">COMPARATIVO E TIPO DE DESCONEXAO</div>
+  <div class="row g-2">
+    <div class="col-lg-6 col-12"><div class="graph-card"><h2>Comparativo Safra 1M x 4M x 13M</h2><div id="g_safra"></div></div></div>
+    <div class="col-lg-6 col-12"><div class="graph-card"><h2>Opcao x Inadimplencia</h2><div id="g_tipo"></div></div></div>
+  </div>
+
+  <div class="section-header">MATRIZ PRINCIPAL — RNO + CIDADES</div>
+  <div class="graph-card matrix-card">
+    <div id="matriz" class="matrix-holder loading">Carregando matriz...</div>
+  </div>
+
+</div>
+
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
-
-<style>
-
-:root{
-    --claro:#E60000;
-    --bg:#f5f6f8;
-    --card:#ffffff;
-    --text:#1b1f2a;
-    --muted:#6b7280;
-    --line:#e5e7eb;
-    --green:#10893e;
-    --red:#b91c1c;
-}
-
-.safra-page{
-    background:var(--bg);
-    margin:-24px;
-    padding:16px;
-    min-height:100vh;
-    color:var(--text);
-    font-family:"Segoe UI",Arial,sans-serif;
-}
-
-.safra-hero{
-    height:90px;
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    padding:0 24px;
-    border-radius:18px;
-    color:#fff;
-    margin-bottom:12px;
-    background:linear-gradient(
-        135deg,
-        #ff2c2c,
-        #c70000
-    );
-}
-
-.safra-hero h1{
-    margin:0;
-    font-size:28px;
-    font-weight:900;
-}
-
-.safra-hero p{
-    margin-top:4px;
-    font-size:13px;
-}
-
-.safra-pill{
-    padding:8px 16px;
-    border-radius:999px;
-    background:rgba(255,255,255,.15);
-    font-weight:800;
-}
-
-.safra-filters{
-    display:grid;
-    grid-template-columns:
-        90px
-        90px
-        80px
-        220px
-        160px
-        220px;
-    gap:10px;
-    justify-content:center;
-    background:#fff;
-    padding:12px;
-    border-radius:16px;
-    margin-bottom:12px;
-}
-
-.kpis{
-    display:grid;
-    grid-template-columns:repeat(8,1fr);
-    gap:8px;
-    margin-bottom:12px;
-}
-
-.kpi{
-    background:#fff;
-    border-radius:16px;
-    padding:12px;
-    min-height:72px;
-}
-
-.kpi small{
-    display:block;
-    font-size:11px;
-    font-weight:800;
-}
-
-.kpi strong{
-    display:block;
-    margin-top:6px;
-    font-size:18px;
-    font-weight:900;
-}
-
-.grid{
-    display:grid;
-    grid-template-columns:minmax(0,1fr) minmax(0,1fr);
-    gap:12px;
-}
-
-.card{
-    background:#fff;
-    border-radius:16px;
-    padding:14px;
-}
-
-.chart{height:240px;}
-
-.matrix{
-    background:#fff;
-    border-radius:16px;
-    margin-top:12px;
-    padding:14px;
-    max-height:680px;
-    overflow:auto;
-}
-
-.matrix thead th{
-    position:sticky;
-    top:0;
-    z-index:10;
-    background:#1f2937;
-    color:white;
-}
-
-.matrix tbody tr:nth-child(even){
-    background:#f7f9fb;
-}
-
-.matrix tbody tr.rno{
-    background:#fff2f2;
-    font-weight:900;
-}
-
-
-
-<style>
-
-.card{
-
-    border:1px solid #d1d5db !important;
-
-    box-shadow:
-        0 3px 12px rgba(0,0,0,.05);
-}
-
-.matrix{
-
-    border:1px solid #d1d5db !important;
-}
-
-.kpi{
-
-    border:1px solid #e5e7eb !important;
-}
-
-</style>
-
-
-</style>
-
-<div class="safra-page"><section class="safra-hero"><div><h1>Painel Safra — Recuperação, Meta e Evolução</h1><p>Visão executiva RNO + Cidades · Opção x Inadimplência · GAP volumétrico e percentual vs metas oficiais</p></div><div class="safra-pill">ADM · Desconexão · RNO</div></section><section class="safra-filters"><div class="filtro"><label>ANO</label><select id="ano" multiple></select></div><div class="filtro"><label>MÊS</label><select id="mes" multiple></select></div><div class="filtro"><label>DIA</label><select id="dia" multiple></select></div><div class="filtro"><label>UF</label><select id="uf" multiple></select></div><div class="filtro"><label>CIDADE</label><select id="cidade" multiple></select></div><div class="filtro"><label>SAFRA</label><select id="safra" multiple></select></div><div class="filtro"><label>TIPO</label><select id="tipo" multiple></select></div></section><section class="kpis" id="kpis"></section><section class="grid"><div class="card"><h2>Recuperado x Meta</h2><div id="g_meta" class="chart"></div></div><div class="card"><h2>Ranking de Cidades</h2><div id="g_rank" class="chart"></div></div><div class="card"><h2>Comparativo Safra 1M x 4M x 13M</h2>
-<div id="g_safra" class="chart"></div>
-</div><div class="card"><h2>Opção x Inadimplência</h2>
-<div id="g_tipo" class="chart"></div>
-</div></section><section class="matrix"><h2>Matriz Principal — RNO + Cidades</h2><div id="matriz" class="loading">Carregando matriz...</div></section></div>
+<script src="https://cdn.jsdelivr.net/npm/choices.js@10.2.0/public/assets/scripts/choices.min.js"></script>
 <script>
-const ids=['ano','mes','dia','uf','cidade','safra','tipo'];const choices={};let updating=false;function fmt(n){return(Number(n)||0).toLocaleString('pt-BR')}function pct(n){return(Number(n)||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+'%'}function qs(){const p=new URLSearchParams();ids.forEach(id=>{const v=choices[id]?.getValue(true)||[];if(v.length)p.set(id,v.join(','));});return p.toString()}function setOptions(id,arr){choices[id].clearStore();choices[id].setChoices((arr||[]).map(v=>({value:String(v),label:String(v)})),'value','label',true)}async function loadOptions(){const r=await fetch('/dash/safra/api/options');const j=await r.json();if(!j.ok){document.getElementById('matriz').innerHTML='<div class="loading">'+(j.erro||'Sem opções')+'</div>';return}updating=true;ids.forEach(id=>setOptions(id,j.options[id]||[]));updating=false}function renderKpis(k){const item=(t,v,c='')=>`<div class="kpi"><small>${t}</small><strong class="${c}">${v}</strong></div>`;document.getElementById('kpis').innerHTML=[item('Total Desconectado',fmt(k.desc)),item('Total Recuperado',fmt(k.rec)),item('% Recuperação',pct(k.pct),k.gap_pct>=0?'pos':'neg'),item('Meta',pct(k.meta)),item('GAP vs Meta',`${fmt(k.gap_vol)} · ${pct(k.gap_pct)}`,k.gap_pct>=0?'pos':'neg'),item('Faltam Recuperar',fmt(k.faltam),k.faltam>0?'neg':'pos'),item('Necessário por Dia',fmt(k.necessario_dia)),item('Tendência',k.tendencia,k.gap_pct>=0?'pos':'neg')].join('')}
-function plotAll(j){
+(function(){
+  const FILTER_IDS = ["ano","mes","dia","uf","cidade","safra","tipo"];
+  const SELECT_IDS = {
+    ano:   "f-ano",
+    mes:   "f-mes",
+    dia:   "f-dia",
+    uf:    "f-uf",
+    cidade:"f-cidade",
+    safra: "f-safra",
+    tipo:  "f-tipo"
+  };
+  const choices = {};
+  let updating = false;
+  const status = document.getElementById("status");
 
-    const cfg = {
-        displayModeBar:false,
-        responsive:true
-    };
+  const fmt = n => (Number(n)||0).toLocaleString("pt-BR");
+  const pct = n => (Number(n)||0).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})+"%";
 
+  // ===== KPIs do safra =====
+  const KPIS = [
+    {key:"desc",   label:"TOTAL DESCONECTADO", icon:"bi-box-arrow-left",             cor:"#1565C0"},
+    {key:"rec",    label:"TOTAL RECUPERADO",   icon:"bi-check2-circle",              cor:"#2E7D32"},
+    {key:"pct",    label:"% RECUPERACAO",      icon:"bi-graph-up-arrow",             cor:"#2E7D32",  isPct:true,  sign:true},
+    {key:"meta",   label:"META",               icon:"bi-bullseye",                   cor:"#F57C00",  isPct:true},
+    {key:"gap",    label:"GAP vs META",        icon:"bi-exclamation-diamond-fill",   cor:"#E60000",  sign:true},
+    {key:"faltam", label:"FALTAM RECUPERAR",   icon:"bi-hourglass-split",            cor:"#B71C1C",  sign:true},
+    {key:"npd",    label:"NECESSARIO POR DIA", icon:"bi-calendar3-week",             cor:"#7B1FA2"},
+    {key:"tend",   label:"TENDENCIA",          icon:"bi-signpost-2-fill",            cor:"#1565C0",  isTxt:true, sign:true},
+  ];
+
+  function qs(){
+    const p = new URLSearchParams();
+    FILTER_IDS.forEach(id => {
+      const v = (choices[id] && choices[id].getValue(true)) || [];
+      if (v.length) p.set(id, v.join(","));
+    });
+    return p.toString();
+  }
+
+  function setOptions(id, arr){
+    if (!choices[id]) return;
+    choices[id].clearStore();
+    choices[id].setChoices((arr||[]).map(v => ({value:String(v), label:String(v)})), "value", "label", true);
+  }
+
+  async function loadOptions(){
+    const r = await fetch("/dash/safra/api/options");
+    const j = await r.json();
+    if (!j.ok){
+      document.getElementById("matriz").innerHTML = '<div class="text-muted text-center p-4">'+(j.erro||"Sem opcoes")+"</div>";
+      return;
+    }
+    updating = true;
+    FILTER_IDS.forEach(id => setOptions(id, j.options[id] || []));
+    updating = false;
+  }
+
+  function renderKpis(k){
+    const kMap = {desc:"desc",rec:"rec",pct:"pct",meta:"meta",gap:"gap",faltam:"faltam",npd:"necessario_dia",tend:"tendencia"};
+    const box = document.getElementById("kpis");
+    box.innerHTML = "";
+    KPIS.forEach(d => {
+      const raw = (k && k[kMap[d.key]]) || 0;
+      let val = d.isTxt ? String(raw||"SEM DADOS") : (d.isPct ? pct(raw) : fmt(raw));
+      let cls = "";
+      if (d.sign && !d.isTxt){
+        const n = Number(raw)||0;
+        cls = n >= 0 ? "pos" : "neg";
+        if (d.key === "faltam") cls = n > 0 ? "neg" : "pos";
+      }
+      if (d.key === "tend"){
+        cls = String(raw).indexOf("ABAIXO") !== -1 ? "neg" : (String(raw).indexOf("ACIMA")!==-1 ? "pos" : "");
+      }
+      const col = document.createElement("div");
+      col.className = "col-md-3 col-6";
+      col.innerHTML = `<div class="card shadow-sm text-center kpi-card" style="border-left-color:${d.cor}">
+        <div class="card-body">
+          <div class="mb-1"><i class="bi ${d.icon}" style="font-size:1.6rem;color:${d.cor}"></i></div>
+          <p class="text-muted small mb-1">${d.label}</p>
+          <div class="kpi-val ${cls}">${val}</div>
+        </div>
+      </div>`;
+      box.appendChild(col);
+    });
+  }
+
+  function drawFig(id, fig){
+    const el = document.getElementById(id);
+    if (!fig || !fig.data){
+      Plotly.purge(el);
+      el.innerHTML = '<div class="text-muted text-center p-4">Sem dados</div>';
+      return;
+    }
+    Plotly.react(el, fig.data, fig.layout, {displayModeBar:false, responsive:true, displaylogo:false});
+  }
+
+  function plotAll(j){
     const layoutPadrao = {
-
-        height:220,
-
-        margin:{
-            t:40,
-            l:40,
-            r:20,
-            b:40
-        },
-
-        paper_bgcolor:'#ffffff',
-        plot_bgcolor:'#ffffff',
-
-        font:{
-            family:'Segoe UI',
-            size:12
-        }
+      height: 280,
+      margin:{ t:28, l:40, r:16, b:40 },
+      paper_bgcolor:'#ffffff',
+      plot_bgcolor:'#ffffff',
+      font:{ family:'Segoe UI', size:11 }
     };
 
-    Plotly.newPlot(
+    drawFig("g_meta", {
+      data: [{ type:'bar',
+        x:['Recuperado','Meta'],
+        y:[j.kpis.rec, Math.round(j.kpis.desc * j.kpis.meta / 100)],
+        text:[fmt(j.kpis.rec), fmt(Math.round(j.kpis.desc * j.kpis.meta / 100))],
+        textposition:'outside',
+        marker:{ color:['#E60000','#0F172A'] }
+      }],
+      layout: {...layoutPadrao, yaxis:{ visible:false }}
+    });
 
-        'g_meta',
+    const rank = (j.ranking || []).slice(0,10).reverse();
+    drawFig("g_rank", {
+      data: [{ type:'bar', orientation:'h',
+        y: rank.map(x => x.cidade),
+        x: rank.map(x => x.pct),
+        text: rank.map(x => x.pct.toFixed(1)+"%"),
+        textposition:'outside',
+        marker:{ color:'#E60000' }
+      }],
+      layout: {...layoutPadrao, xaxis:{ range:[0,100], ticksuffix:'%' }}
+    });
 
-        [{
-            type:'bar',
+    drawFig("g_safra", {
+      data: [{ type:'bar',
+        x: (j.comparativo || []).map(x => x.safra),
+        y: (j.comparativo || []).map(x => x.pct),
+        text: (j.comparativo || []).map(x => x.pct.toFixed(1)+"%"),
+        textposition:'outside',
+        marker:{ color:'#C41212' }
+      }],
+      layout: {...layoutPadrao, yaxis:{ range:[0,100], ticksuffix:'%' }}
+    });
 
-            x:[
-                'Recuperado',
-                'Meta'
-            ],
+    drawFig("g_tipo", {
+      data: [{ type:'bar',
+        x: (j.tipos || []).map(x => x.tipo),
+        y: (j.tipos || []).map(x => x.pct),
+        text: (j.tipos || []).map(x => x.pct.toFixed(1)+"%"),
+        textposition:'outside',
+        marker:{ color:['#991B1B','#F04444'] }
+      }],
+      layout: {...layoutPadrao, yaxis:{ range:[0,100], ticksuffix:'%' }}
+    });
+  }
 
-            y:[
-                j.kpis.rec,
-                Math.round(
-                    j.kpis.desc *
-                    j.kpis.meta / 100
-                )
-            ],
+  function td(v, isPct=false, cls=''){return `<td class="${cls}">${isPct?pct(v):fmt(v)}</td>`;}
 
-            text:[
-                fmt(j.kpis.rec),
-                fmt(
-                    Math.round(
-                        j.kpis.desc *
-                        j.kpis.meta / 100
-                    )
-                )
-            ],
+  function renderMatrix(rows){
+    const container = document.getElementById("matriz");
+    let html = '';
+    ['1 MES','4 MESES','13 MESES'].forEach(safra => {
+      const rs = (rows||[]).filter(r => r.safra === safra);
+      html += `<div class="safra-title">SAFRA ${safra}</div><table><thead><tr>
+        <th rowspan="2">Operacao</th><th colspan="3">INAD</th><th colspan="3">OPCAO</th>
+        <th colspan="2">GAP INAD</th><th colspan="2">GAP OPCAO</th></tr>
+        <tr><th>%</th><th>DESC</th><th>REC</th><th>%</th><th>DESC</th><th>REC</th>
+        <th>GAP Vol</th><th>GAP %</th><th>GAP Vol</th><th>GAP %</th></tr></thead><tbody>`;
+      rs.forEach(r => {
+        html += `<tr class="${r.operacao==='RNO'?'rno':''}">
+          <td>${r.operacao}</td>
+          ${td(r.inad_pct,true)}${td(r.inad_desc)}${td(r.inad_rec)}
+          ${td(r.opcao_pct,true)}${td(r.opcao_desc)}${td(r.opcao_rec)}
+          ${td(r.inad_gap_vol,false, r.inad_gap_vol>=0?'pos':'neg')}${td(r.inad_gap_pct,true, r.inad_gap_pct>=0?'pos':'neg')}
+          ${td(r.opcao_gap_vol,false, r.opcao_gap_vol>=0?'pos':'neg')}${td(r.opcao_gap_pct,true, r.opcao_gap_pct>=0?'pos':'neg')}
+        </tr>`;
+      });
+      html += '</tbody></table>';
+    });
+    container.innerHTML = html;
+  }
 
-            textposition:'outside',
+  function renderStatus(txt){ if (status) status.textContent = txt; }
 
-            marker:{
-                color:[
-                    '#E60000',
-                    '#0F172A'
-                ]
-            }
-        }],
+  async function loadData(){
+    renderStatus("Atualizando...");
+    try {
+      const r = await fetch("/dash/safra/api/data?"+qs());
+      const j = await r.json();
+      if (!j.ok){
+        document.getElementById("matriz").innerHTML = '<div class="text-muted text-center p-4">'+(j.erro||"Sem dados")+"</div>";
+        renderStatus("Erro");
+        return;
+      }
+      renderKpis(j.kpis);
+      plotAll(j);
+      renderMatrix(j.matriz);
+      renderStatus("OK");
+      const overlay = document.getElementById("loading-overlay");
+      if (overlay) overlay.style.display = "none";
+    } catch(e){
+      renderStatus("Erro: "+e.message);
+      console.error(e);
+    }
+  }
 
-        {
-            ...layoutPadrao,
+  // ===== Inicializar Choices.js =====
+  FILTER_IDS.forEach(id => {
+    const el = document.getElementById(SELECT_IDS[id]);
+    const ph = el.getAttribute("data-ph") || "Selecione...";
+    const c = new Choices(el, {
+      removeItemButton: true,
+      shouldSort: false,
+      placeholder: true,
+      placeholderValue: ph,
+      searchPlaceholderValue: "Buscar...",
+      searchEnabled: true,
+      itemSelectText: "",
+      noResultsText: "Sem resultados",
+      noChoicesText: "Sem opcoes",
+      duplicateItemsAllowed: false,
+    });
+    choices[id] = c;
+    el.addEventListener("addItem", () => { if (!updating) loadData(); });
+    el.addEventListener("removeItem", () => { if (!updating) loadData(); });
+  });
 
-            yaxis:{
-                visible:false
-            }
-        },
+  document.getElementById("btn-limpar").addEventListener("click", () => {
+    updating = true;
+    FILTER_IDS.forEach(id => { const c = choices[id]; if (c) c.removeActiveItems(); });
+    updating = false;
+    loadData();
+  });
 
-        cfg
-    );
-
-    const rank =
-        (j.ranking || [])
-        .slice(0,10)
-        .reverse();
-
-    Plotly.newPlot(
-
-        'g_rank',
-
-        [{
-            type:'bar',
-
-            orientation:'h',
-
-            y:
-                rank.map(
-                    x => x.cidade
-                ),
-
-            x:
-                rank.map(
-                    x => x.pct
-                ),
-
-            text:
-                rank.map(
-                    x => x.pct.toFixed(1) + '%'
-                ),
-
-            textposition:'outside',
-
-            marker:{
-                color:'#E60000'
-            }
-        }],
-
-        {
-            ...layoutPadrao,
-
-            xaxis:{
-                range:[0,100],
-                ticksuffix:'%'
-            }
-        },
-
-        cfg
-    );
-
-    Plotly.newPlot(
-
-        'g_safra',
-
-        [{
-            type:'bar',
-
-            x:
-                (j.comparativo || [])
-                .map(x => x.safra),
-
-            y:
-                (j.comparativo || [])
-                .map(x => x.pct),
-
-            text:
-                (j.comparativo || [])
-                .map(
-                    x => x.pct.toFixed(1) + '%'
-                ),
-
-            textposition:'outside',
-
-            marker:{
-                color:'#C41212'
-            }
-        }],
-
-        {
-            ...layoutPadrao,
-
-            yaxis:{
-                range:[0,100],
-                ticksuffix:'%'
-            }
-        },
-
-        cfg
-    );
-
-    Plotly.newPlot(
-
-        'g_tipo',
-
-        [{
-            type:'bar',
-
-            x:
-                (j.tipos || [])
-                .map(x => x.tipo),
-
-            y:
-                (j.tipos || [])
-                .map(x => x.pct),
-
-            text:
-                (j.tipos || [])
-                .map(
-                    x => x.pct.toFixed(1) + '%'
-                ),
-
-            textposition:'outside',
-
-            marker:{
-                color:[
-                    '#991B1B',
-                    '#F04444'
-                ]
-            }
-        }],
-
-        {
-            ...layoutPadrao,
-
-            yaxis:{
-                range:[0,100],
-                ticksuffix:'%'
-            }
-        },
-
-        cfg
-    );
-}
-
-
-function td(v,isPct=false,cls=''){return`<td class="${cls}">${isPct?pct(v):fmt(v)}</td>`}function renderMatrix(rows){let html='';['1 MES','4 MESES','13 MESES'].forEach(safra=>{const rs=(rows||[]).filter(r=>r.safra===safra);html+=`<div class="safra-title">SAFRA ${safra}</div><table><thead><tr><th rowspan="2">Operação</th><th colspan="3">INAD</th><th colspan="3">OPÇÃO</th><th colspan="2">GAP INAD</th><th colspan="2">GAP OPÇÃO</th></tr><tr><th>%</th><th>DESC</th><th>REC</th><th>%</th><th>DESC</th><th>REC</th><th>GAP Vol</th><th>GAP %</th><th>GAP Vol</th><th>GAP %</th></tr></thead><tbody>`;rs.forEach(r=>{html+=`<tr class="${r.operacao==='RNO'?'rno':''}"><td>${r.operacao}</td>${td(r.inad_pct,true)}${td(r.inad_desc)}${td(r.inad_rec)}${td(r.opcao_pct,true)}${td(r.opcao_desc)}${td(r.opcao_rec)}${td(r.inad_gap_vol,false,r.inad_gap_vol>=0?'pos':'neg')}${td(r.inad_gap_pct,true,r.inad_gap_pct>=0?'pos':'neg')}${td(r.opcao_gap_vol,false,r.opcao_gap_vol>=0?'pos':'neg')}${td(r.opcao_gap_pct,true,r.opcao_gap_pct>=0?'pos':'neg')}</tr>`});html+='</tbody></table>'});document.getElementById('matriz').innerHTML=html}async function loadData(){const r=await fetch('/dash/safra/api/data?'+qs());const j=await r.json();if(!j.ok){document.getElementById('matriz').innerHTML='<div class="loading">'+(j.erro||'Sem dados')+'</div>';return}renderKpis(j.kpis);plotAll(j);
-renderMatrix(j.matriz);
-}async function init(){ids.forEach(id=>{choices[id]=new Choices('#'+id,{removeItemButton:true,searchEnabled:true,shouldSort:false,itemSelectText:''});document.getElementById(id).addEventListener('change',()=>{if(!updating)loadData()})});await loadOptions();await loadData()}init();
-
-
+  async function init(){
+    await loadOptions();
+    await loadData();
+  }
+  init();
+})();
 </script>
+
 {% endblock %}
