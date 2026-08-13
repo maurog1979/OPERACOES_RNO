@@ -25,30 +25,30 @@
     --opcao: #F04444;
   }
 
-  .safra-wrap { padding: 1rem 1.5rem 2rem; background:#F5F6FA; min-height:100vh; }
+  .safra-wrap { padding: .75rem 1rem 1.5rem; background:#F5F6FA; min-height:100vh; }
   .safra-title-bar {
     display:flex; justify-content:space-between; align-items:center;
     background:linear-gradient(90deg,#E60000,#B71C1C); color:#fff;
-    padding:.8rem 1.2rem; border-radius:.6rem; margin-bottom:1rem;
-    font-weight:600;
+    padding:.55rem 1rem; border-radius:.5rem; margin-bottom:.75rem;
+    font-weight:600; font-size:.95rem;
   }
   .safra-title-bar a { color:#fff; background:rgba(255,255,255,.15);
-    padding:.4rem .8rem; border-radius:.4rem; text-decoration:none; font-size:.9rem; }
+    padding:.3rem .7rem; border-radius:.35rem; text-decoration:none; font-size:.85rem; }
   .safra-title-bar a:hover { background:rgba(255,255,255,.3); }
-  .filter-bar { background:#fff; padding:1rem; border-radius:.6rem;
-                box-shadow:0 1px 3px rgba(0,0,0,.06); margin-bottom:1rem; }
-  .filter-bar label { font-size:.75rem; font-weight:600; color:#555;
-                      text-transform:uppercase; margin-bottom:.3rem; display:block; }
+  .filter-bar { background:#fff; padding:.6rem .75rem .5rem; border-radius:.5rem;
+                box-shadow:0 1px 3px rgba(0,0,0,.06); margin-bottom:.75rem; }
+  .filter-bar label { font-size:.68rem; font-weight:600; color:#555;
+                      text-transform:uppercase; margin-bottom:.2rem; display:block; }
 
   /* ===== Choices.js — estilo Claro (tags vermelhas) ===== */
-  .choices { margin-bottom: 0 !important; font-size: .85rem; }
+  .choices { margin-bottom: 0 !important; font-size: .8rem; }
   .choices__inner {
-    min-height: 38px !important;
-    padding: 4px 7.5px 0 7.5px !important;
+    min-height: 32px !important;
+    padding: 3px 6px 0 6px !important;
     background:#fff !important;
     border:1px solid #ced4da !important;
     border-radius:.375rem !important;
-    font-size:.85rem !important;
+    font-size:.8rem !important;
   }
   .choices[data-type*="select-multiple"] .choices__button {
     border-left:1px solid rgba(255,255,255,.5) !important;
@@ -75,15 +75,18 @@
 
   .kpi-card { border:none; border-left:4px solid #1565C0; transition:transform .15s; }
   .kpi-card:hover { transform:translateY(-2px); }
-  .kpi-card .kpi-val { font-size:1.15rem; font-weight:800; }
+  .kpi-card .kpi-val { font-size:1rem; font-weight:800; }
   .kpi-card .kpi-val.pos { color: var(--green); }
   .kpi-card .kpi-val.neg { color: var(--red-dark); }
-  .section-header { background:linear-gradient(90deg,#E60000,#B71C1C); color:#fff; padding:.5rem 1rem;
-                    border-radius:.4rem; font-weight:600; font-size:.85rem;
-                    letter-spacing:.05em; margin:1rem 0 .5rem; }
-  .graph-card { background:#fff; border-radius:.6rem; padding:.5rem .75rem;
+  .kpi-card .card-body { padding:.5rem .6rem; }
+  .kpi-card p { margin-bottom:.1rem; }
+  .kpi-card i { font-size:1.3rem !important; }
+  .section-header { background:linear-gradient(90deg,#E60000,#B71C1C); color:#fff; padding:.4rem .8rem;
+                    border-radius:.4rem; font-weight:600; font-size:.8rem;
+                    letter-spacing:.05em; margin:.6rem 0 .4rem; }
+  .graph-card { background:#fff; border-radius:.5rem; padding:.4rem .6rem;
                 box-shadow:0 1px 3px rgba(0,0,0,.06); }
-  .graph-card h2 { font-size:.95rem; font-weight:700; margin:0 0 .25rem 0; color:#333; }
+  .graph-card h2 { font-size:.85rem; font-weight:700; margin:0 0 .15rem 0; color:#333; }
   #btn-limpar { font-size:.8rem; }
 
   /* ===== Loading spinner ===== */
@@ -214,10 +217,20 @@
     return p.toString();
   }
 
-  function setOptions(id, arr){
-    if (!choices[id]) return;
-    choices[id].clearStore();
-    choices[id].setChoices((arr||[]).map(v => ({value:String(v), label:String(v)})), "value", "label", true);
+  function applyOptions(opts){
+    if (!opts) return;
+    updating = true;
+    FILTER_IDS.forEach(id => {
+      const c = choices[id];
+      if (!c) return;
+      const arr = (opts[id]||[]).map(v => String(v));
+      c.clearChoices();
+      c.setChoices(arr.map(v => ({value:v, label:v})), "value", "label");
+      // Remove itens ativos (ja selecionados) que nao existem mais nas opcoes
+      const sel = (c.getValue(true) || []).map(v => String(v));
+      sel.forEach(v => { if (arr.indexOf(v) === -1) c.removeActiveItemsByValue(v); });
+    });
+    updating = false;
   }
 
   async function loadOptions(){
@@ -227,9 +240,7 @@
       document.getElementById("matriz").innerHTML = '<div class="text-muted text-center p-4">'+(j.erro||"Sem opcoes")+"</div>";
       return;
     }
-    updating = true;
-    FILTER_IDS.forEach(id => setOptions(id, j.options[id] || []));
-    updating = false;
+    applyOptions(j.options);
   }
 
   function renderKpis(k){
@@ -271,36 +282,54 @@
     Plotly.react(el, fig.data, fig.layout, {displayModeBar:false, responsive:true, displaylogo:false});
   }
 
+  // Trunca nomes longos no ranking para nao desconfigurar o grafico.
+  function label(n){
+    const s = String(n == null ? "" : n).trim();
+    return s.length > 14 ? s.slice(0,13) + "…" : s;
+  }
+  // Qtd maxima de linhas do ranking visivel.
+  function rankLabels(n){ return Math.min(n, 10); }
+
   function plotAll(j){
     const layoutPadrao = {
-      height: 280,
-      margin:{ t:28, l:40, r:16, b:40 },
+      margin:{ t:6, l:8, r:10, b:8 },
       paper_bgcolor:'#ffffff',
       plot_bgcolor:'#ffffff',
-      font:{ family:'Segoe UI', size:11 }
+      font:{ family:'Segoe UI', size:10, color:'#333' }
     };
+
+    // Altura fixa por gráfico p/ acomodar o texto "fora" (acima) das barras sem cortar.
+    // margem superior extra dá espaço ao rótulo da barra mais alta.
+    const layoutVertical = {...layoutPadrao, height:230, margin:{...layoutPadrao.margin, t:28}};
+    // Altura dinâmica do ranking: ~26px por cidade para nomes longos não colidirem.
+    const layoutRanking = {...layoutPadrao, height:Math.max(170, rankLabels((j.ranking||[]).slice(0,10).length)*26 + 20)};
 
     drawFig("g_meta", {
       data: [{ type:'bar',
         x:['Recuperado','Meta'],
         y:[j.kpis.rec, Math.round(j.kpis.desc * j.kpis.meta / 100)],
         text:[fmt(j.kpis.rec), fmt(Math.round(j.kpis.desc * j.kpis.meta / 100))],
-        textposition:'outside',
-        marker:{ color:['#E60000','#0F172A'] }
+        width:0.45,
+        marker:{ line:{ width:0 }, color:['#E60000','#0F172A'] },
+        cliponaxis:false,
+        textposition:'outside'
       }],
-      layout: {...layoutPadrao, yaxis:{ visible:false }}
+      layout: {...layoutVertical, yaxis:{ visible:false, rangemode:'tozero' },
+                bargap:0.4}
     });
 
     const rank = (j.ranking || []).slice(0,10).reverse();
     drawFig("g_rank", {
       data: [{ type:'bar', orientation:'h',
-        y: rank.map(x => x.cidade),
+        y: rank.map(x => label(x.cidade)),
         x: rank.map(x => x.pct),
         text: rank.map(x => x.pct.toFixed(1)+"%"),
         textposition:'outside',
-        marker:{ color:'#E60000' }
+        cliponaxis:false,
+        marker:{ line:{ width:0 }, color:'#E60000' }
       }],
-      layout: {...layoutPadrao, xaxis:{ range:[0,100], ticksuffix:'%' }}
+      layout: {...layoutRanking, xaxis:{ range:[0,110], ticksuffix:'%', showgrid:true },
+                yaxis:{ autorange:'reversed', automargin:true }, bargap:0.3}
     });
 
     drawFig("g_safra", {
@@ -308,10 +337,12 @@
         x: (j.comparativo || []).map(x => x.safra),
         y: (j.comparativo || []).map(x => x.pct),
         text: (j.comparativo || []).map(x => x.pct.toFixed(1)+"%"),
-        textposition:'outside',
-        marker:{ color:'#C41212' }
+        width:0.45,
+        marker:{ line:{ width:0 }, color:'#C41212' },
+        cliponaxis:false,
+        textposition:'outside'
       }],
-      layout: {...layoutPadrao, yaxis:{ range:[0,100], ticksuffix:'%' }}
+      layout: {...layoutVertical, yaxis:{ range:[0,105], ticksuffix:'%' }, bargap:0.4}
     });
 
     drawFig("g_tipo", {
@@ -319,10 +350,12 @@
         x: (j.tipos || []).map(x => x.tipo),
         y: (j.tipos || []).map(x => x.pct),
         text: (j.tipos || []).map(x => x.pct.toFixed(1)+"%"),
-        textposition:'outside',
-        marker:{ color:['#991B1B','#F04444'] }
+        width:0.45,
+        marker:{ line:{ width:0 }, color:['#991B1B','#F04444'] },
+        cliponaxis:false,
+        textposition:'outside'
       }],
-      layout: {...layoutPadrao, yaxis:{ range:[0,100], ticksuffix:'%' }}
+      layout: {...layoutVertical, yaxis:{ range:[0,105], ticksuffix:'%' }, bargap:0.4}
     });
   }
 
@@ -364,6 +397,7 @@
         renderStatus("Erro");
         return;
       }
+      applyOptions(j.options);
       renderKpis(j.kpis);
       plotAll(j);
       renderMatrix(j.matriz);
