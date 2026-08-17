@@ -131,6 +131,85 @@ def build_where(filters, tabela):
     )
 
 # =====================================================
+# OPCOES FILTRADAS (CASCATA)
+# =====================================================
+
+# Campo DISTINCT de cada filtro dentro da tabela mensal.
+CAMPO_MENSAL = {
+    "ano": "ano",
+    "mes": "mes",
+    "uf": "uf",
+    "cidade": "cidade",
+    "safra": "safra",
+    "tipo": "ds_tipo_desconexao",
+}
+
+
+def montar_opcoes_filtradas(filters):
+    """
+    Deriva as opcoes disponiveis de cada filtro a partir dos DEMAIS
+    filtros selecionados (excluindo o proprio campo) -> cascata.
+
+    Ex.: com uf='AP', as opcoes de cidade trazem apenas MACAPA e SANTANA.
+    A coluna 'dia' vive na tabela diaria; as demais na mensal.
+    """
+
+    opcoes = {}
+
+    # Campos da tabela mensal
+    for chave, coluna in CAMPO_MENSAL.items():
+
+        sub = dict(filters)
+        sub.pop(chave, None)   # exclui o proprio campo
+        sub.pop("dia", None)   # 'dia' nao existe em safra_resumo_mensal
+
+        where_sql, params = build_where(
+            sub,
+            "safra_resumo_mensal"
+        )
+
+        rows = query(
+            f"""
+            SELECT DISTINCT {coluna} AS v
+            FROM safra_resumo_mensal
+            {where_sql}
+            ORDER BY v
+            """,
+            params
+        )
+
+        opcoes[chave] = [
+            r["v"]
+            for r in rows
+        ]
+
+    # Campo 'dia' usa a tabela diaria
+    sub = dict(filters)
+    sub.pop("dia", None)       # exclui o proprio campo
+
+    where_sql, params = build_where(
+        sub,
+        "safra_resumo_diario"
+    )
+
+    rows = query(
+        f"""
+        SELECT DISTINCT dia AS v
+        FROM safra_resumo_diario
+        {where_sql}
+        ORDER BY v
+        """,
+        params
+    )
+
+    opcoes["dia"] = [
+        r["v"]
+        for r in rows
+    ]
+
+    return opcoes
+
+# =====================================================
 # INDEX
 # =====================================================
 
@@ -783,9 +862,15 @@ def data():
             mensal
         )
 
+        opcoes = montar_opcoes_filtradas(
+            filters
+        )
+
         return jsonify({
 
             "ok": True,
+
+            "options": opcoes,
 
             "kpis": kpis,
 
