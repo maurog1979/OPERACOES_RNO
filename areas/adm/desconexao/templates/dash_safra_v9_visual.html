@@ -117,6 +117,18 @@
   .matrix-holder tbody tr.rno { background:#fff2f2; font-weight:800; }
   .matrix-holder td.pos { color: var(--green); font-weight:700; }
   .matrix-holder td.neg { color: var(--red-dark); font-weight:700; }
+
+  /* ===== Painéis da matriz (INAD, OPCAO, GAP INAD, GAP OPCAO) =====
+     Cada bloco tem contorno (linhas horizontal e vertical) na cor do painel,
+     com espessura fina, diferenciando a visualização. */
+  .matrix-holder th.pan-ind,    .matrix-holder td.pan-ind    { border:1.5px solid #1565C0; }
+  .matrix-holder th.pan-opcao,  .matrix-holder td.pan-opcao  { border:1.5px solid #2E7D32; }
+  .matrix-holder th.pan-gap-inad,   .matrix-holder td.pan-gap-inad   { border:1.5px solid #E65100; }
+  .matrix-holder th.pan-gap-opcao,  .matrix-holder td.pan-gap-opcao  { border:1.5px solid #6A1B9A; }
+  .matrix-holder thead th.pan-ind    { background:#1e3f74; }
+  .matrix-holder thead th.pan-opcao  { background:#1e5c3a; }
+  .matrix-holder thead th.pan-gap-inad   { background:#6b3410; }
+  .matrix-holder thead th.pan-gap-opcao  { background:#4a2a61; }
   .safra-title { font-size:.85rem; font-weight:800; background:#eef0f3; padding:4px 10px;
                  border-radius:6px; margin:10px 0 4px 0; display:inline-block; }
   .matrix-card { color:#333; }
@@ -168,7 +180,7 @@
     <div class="col-lg-6 col-12"><div class="graph-card"><h2>Opcao x Inadimplencia</h2><div id="g_tipo"></div></div></div>
   </div>
 
-  <div class="section-header">MATRIZ PRINCIPAL — RNO + CIDADES</div>
+  <div class="section-header">PAINEIS SAFRA - RNO e CIDADES</div>
   <div class="graph-card matrix-card">
     <div id="matriz" class="matrix-holder loading">Carregando matriz...</div>
   </div>
@@ -282,10 +294,15 @@
     Plotly.react(el, fig.data, fig.layout, {displayModeBar:false, responsive:true, displaylogo:false});
   }
 
-  // Trunca nomes longos no ranking para nao desconfigurar o grafico.
+  // Nomes longos no ranking: quebra em até 2 linhas (em vez de truncar com "…")
+  // para que palavras não sejam cortadas.
   function label(n){
     const s = String(n == null ? "" : n).trim();
-    return s.length > 14 ? s.slice(0,13) + "…" : s;
+    if (s.length <= 14) return s;
+    // Primeira quebra no espaço mais próximo de 14 caracteres.
+    let cut = s.indexOf(" ", 10);
+    if (cut === -1 || cut > 16) cut = 14;
+    return s.slice(0, cut).trim() + "<br>" + s.slice(cut).trim();
   }
   // Qtd maxima de linhas do ranking visivel.
   function rankLabels(n){ return Math.min(n, 10); }
@@ -300,9 +317,15 @@
 
     // Altura fixa por gráfico p/ acomodar o texto "fora" (acima) das barras sem cortar.
     // margem superior extra dá espaço ao rótulo da barra mais alta.
-    const layoutVertical = {...layoutPadrao, height:230, margin:{...layoutPadrao.margin, t:28}};
-    // Altura dinâmica do ranking: ~26px por cidade para nomes longos não colidirem.
-    const layoutRanking = {...layoutPadrao, height:Math.max(170, rankLabels((j.ranking||[]).slice(0,10).length)*26 + 20)};
+    const layoutVertical = {...layoutPadrao, height:230, margin:{...layoutPadrao.margin, t:30, b:18}};
+    // Altura dinâmica do ranking: ~30px por cidade (2 linhas p/ nomes longos) sem colidir.
+    // margem direita maior p/ o percentual fora das barras não ser cortado.
+    const layoutRanking = {...layoutPadrao,
+      height:Math.max(170, rankLabels((j.ranking||[]).slice(0,10).length)*30 + 24),
+      margin:{...layoutPadrao.margin, t:20, b:14, r:44, l:12}};
+
+    // Destaque (negrito) dos textos dentro dos gráficos.
+    const tfont = { weight:'bold', size:10.5, color:'#333' };
 
     drawFig("g_meta", {
       data: [{ type:'bar',
@@ -312,9 +335,11 @@
         width:0.45,
         marker:{ line:{ width:0 }, color:['#E60000','#0F172A'] },
         cliponaxis:false,
-        textposition:'outside'
+        textposition:'outside',
+        textfont:{...tfont, size:12, color:'#1F2937'}
       }],
       layout: {...layoutVertical, yaxis:{ visible:false, rangemode:'tozero' },
+                xaxis:{ automargin:true, tickangle:-20, tickfont:{ weight:'bold', color:'#374151' } },
                 bargap:0.4}
     });
 
@@ -326,10 +351,14 @@
         text: rank.map(x => x.pct.toFixed(1)+"%"),
         textposition:'outside',
         cliponaxis:false,
-        marker:{ line:{ width:0 }, color:'#E60000' }
+        marker:{ line:{ width:0 }, color:'#E60000' },
+        textfont:{...tfont, color:'#B91C1C'}
       }],
-      layout: {...layoutRanking, xaxis:{ range:[0,110], ticksuffix:'%', showgrid:true },
-                yaxis:{ autorange:'reversed', automargin:true }, bargap:0.3}
+      layout: {...layoutRanking,
+        xaxis:{ range:[0,116], ticksuffix:'%', showgrid:true, automargin:true,
+                tickfont:{ weight:'bold', color:'#374151' } },
+        yaxis:{ autorange:'reversed', automargin:true,
+                tickfont:{ weight:'bold', color:'#374151' } }, bargap:0.3}
     });
 
     drawFig("g_safra", {
@@ -340,9 +369,11 @@
         width:0.45,
         marker:{ line:{ width:0 }, color:'#C41212' },
         cliponaxis:false,
-        textposition:'outside'
+        textposition:'outside',
+        textfont:{...tfont, color:'#8B0000'}
       }],
-      layout: {...layoutVertical, yaxis:{ range:[0,105], ticksuffix:'%' }, bargap:0.4}
+      layout: {...layoutVertical, yaxis:{ range:[0,105], ticksuffix:'%', tickfont:{ weight:'bold', color:'#374151' } },
+                xaxis:{ automargin:true, tickangle:-15, tickfont:{ weight:'bold', color:'#374151' } }, bargap:0.4}
     });
 
     drawFig("g_tipo", {
@@ -353,9 +384,11 @@
         width:0.45,
         marker:{ line:{ width:0 }, color:['#991B1B','#F04444'] },
         cliponaxis:false,
-        textposition:'outside'
+        textposition:'outside',
+        textfont:{...tfont, color:'#7F1D1D'}
       }],
-      layout: {...layoutVertical, yaxis:{ range:[0,105], ticksuffix:'%' }, bargap:0.4}
+      layout: {...layoutVertical, yaxis:{ range:[0,105], ticksuffix:'%', tickfont:{ weight:'bold', color:'#374151' } },
+                xaxis:{ automargin:true, tickangle:-15, tickfont:{ weight:'bold', color:'#374151' } }, bargap:0.4}
     });
   }
 
@@ -367,17 +400,17 @@
     ['1 MES','4 MESES','13 MESES'].forEach(safra => {
       const rs = (rows||[]).filter(r => r.safra === safra);
       html += `<div class="safra-title">SAFRA ${safra}</div><table><thead><tr>
-        <th rowspan="2">Operacao</th><th colspan="3">INAD</th><th colspan="3">OPCAO</th>
-        <th colspan="2">GAP INAD</th><th colspan="2">GAP OPCAO</th></tr>
+        <th rowspan="2">Operacao</th><th class="pan-ind" colspan="3">INAD</th><th class="pan-opcao" colspan="3">OPCAO</th>
+        <th class="pan-gap-inad" colspan="2">GAP INAD</th><th class="pan-gap-opcao" colspan="2">GAP OPCAO</th></tr>
         <tr><th>%</th><th>DESC</th><th>REC</th><th>%</th><th>DESC</th><th>REC</th>
         <th>GAP Vol</th><th>GAP %</th><th>GAP Vol</th><th>GAP %</th></tr></thead><tbody>`;
       rs.forEach(r => {
         html += `<tr class="${r.operacao==='RNO'?'rno':''}">
           <td>${r.operacao}</td>
-          ${td(r.inad_pct,true)}${td(r.inad_desc)}${td(r.inad_rec)}
-          ${td(r.opcao_pct,true)}${td(r.opcao_desc)}${td(r.opcao_rec)}
-          ${td(r.inad_gap_vol,false, r.inad_gap_vol>=0?'pos':'neg')}${td(r.inad_gap_pct,true, r.inad_gap_pct>=0?'pos':'neg')}
-          ${td(r.opcao_gap_vol,false, r.opcao_gap_vol>=0?'pos':'neg')}${td(r.opcao_gap_pct,true, r.opcao_gap_pct>=0?'pos':'neg')}
+          ${td(r.inad_pct,true,'pan-ind')}${td(r.inad_desc,'','pan-ind')}${td(r.inad_rec,'','pan-ind')}
+          ${td(r.opcao_pct,true,'pan-opcao')}${td(r.opcao_desc,'','pan-opcao')}${td(r.opcao_rec,'','pan-opcao')}
+          ${td(r.inad_gap_vol,false, 'pan-gap-inad '+(r.inad_gap_vol>=0?'pos':'neg'))}${td(r.inad_gap_pct,true, 'pan-gap-inad '+(r.inad_gap_pct>=0?'pos':'neg'))}
+          ${td(r.opcao_gap_vol,false, 'pan-gap-opcao '+(r.opcao_gap_vol>=0?'pos':'neg'))}${td(r.opcao_gap_pct,true, 'pan-gap-opcao '+(r.opcao_gap_pct>=0?'pos':'neg'))}
         </tr>`;
       });
       html += '</tbody></table>';
