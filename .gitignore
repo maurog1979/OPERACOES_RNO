@@ -90,3 +90,7 @@ reports/repository/
 # Arquivos locais ainda nao prontos para versionamento
 database/scripts/carregar_municipios.py
 reports/repository/
+
+# Arquivos locais ainda nao prontos para versionamento
+database/scripts/carregar_municipios.py
+reports/repository/
