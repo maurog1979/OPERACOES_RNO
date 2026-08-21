@@ -1,106 +1,87 @@
-# =============================================
 # Python
-# =============================================
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-.pytest_cache/
-.mypy_cache/
-*.egg-info/
-build/
-dist/
+*.py[cod]
+*$py.class
+.python-version
 
-# =============================================
-# Ambiente virtual
-# =============================================
+# Ambientes virtuais
 .venv/
 venv/
 env/
 ENV/
 
-# =============================================
-# Arquivos de configuração sensíveis
-# =============================================
+# Flask e configuracao local
+instance/
+.flaskenv
+.webassets-cache
 .env
 .env.*
-*.local
+!.env.example
+config_local.py
+settings_local.py
+secrets.json
+credentials.json
+*.pem
+*.key
+id_rsa
+id_rsa.pub
 
-# =============================================
-# Backups / arquivos de trabalho temporários
-# =============================================
-*.bak
-*.bak_*
-*.bkp
-*.bkp_*
-*.backup
-*.backup_*
-*Copia*
-*backup_*
-
-# =============================================
-# Scripts de correção / diagnóstico / utilitários avulsos
-# =============================================
-fix_*.py
-fix*.py
-diagnosticar_*.py
-diagnostico_*.py
-corrigir_*.py
-instalar_*.py
-criar_*.py
-criar_*.bak
-localizar_*.py
-verificar_*.py
-validar_*.py
-inspecionar_*.py
-amostra_*.py
-aplicar_*.py
-sincronizar_*.py
-substituir_*.py
-diagnostico_real_*.py
-criar_corrigir_*.py
-
-# =============================================
-# Relatórios / saídas de diagnóstico (txt, json)
-# =============================================
-*.txt
-!INSTRUCOES_PATCH.md
-!requirements.txt
-*.txt.*
-inspecao.txt
-dash_safra_atual.txt
-dash_safra_html_atual.txt
-*.json.validacao
-validacao_*.json
-
-# =============================================
-# Artefatos residuais diversos
-# =============================================
-*.com_erro*
-python
-# Sub-repo git aninhado (mantido fora do versionamento principal)
-portal_operacoes_rno/
-
-# =============================================
-# Banco de dados
-# =============================================
-database/dumps/
+# Bancos, dumps e backups
 *.sql
-database/scripts/
+*.sqlite
+*.sqlite3
+*.db
+database/backups/
+backups/
+dumps/
 
-# =============================================
-# Executáveis / arquivos binários Windows
-# =============================================
-*.exe
-*.bat
-*.dll
-*.dmg
-*.pkg
+# Cache, logs e relatorios gerados
+.cache/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.log
+logs/
+reports/generated/
 
-# =============================================
-# IDEs / SO
-# =============================================
+# Backups locais
+*.bak
+*.backup
+*.bkp
+*.old
+*.orig
+*.tmp
+*.temp
+*.bak_*
+*.backup_*
+*.bkp_*
+*.com_erro*
+*.quebrado*
+
+# Editores e sistema operacional
 .vscode/
 .idea/
-.DS_Store
+*.code-workspace
+*.swp
+*.swo
 Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+
+# Node e saidas
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+coverage.xml
+test-results/
+output/
+dist/
+build/
+organizar_repositorio*.py
+validar_organizacao*.py
+
+# Historico local preservado pela branch archive
+legacy/
