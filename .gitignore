@@ -85,3 +85,8 @@ validar_organizacao*.py
 
 # Historico local preservado pela branch archive
 legacy/
+reports/repository/
+
+# Arquivos locais ainda nao prontos para versionamento
+database/scripts/carregar_municipios.py
+reports/repository/
