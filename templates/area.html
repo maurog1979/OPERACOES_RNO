@@ -1,47 +1,51 @@
-{% extends "base.html" %}
-{% block title %}{{ area.nome }}{% endblock %}
-
+{% extends 'base.html' %}
+{% block title %}Área ADM | Portal de Relatórios{% endblock %}
 {% block content %}
-<main class="main">
-  <a href="{{ url_for('home') }}" class="breadcrumb-link">
-    <div class="breadcrumb">
-      <i class="fa-solid fa-house"></i> Home
-      <i class="fa-solid fa-chevron-right"></i>
-      <strong style="color:var(--text-primary);">{{ area.nome }}</strong>
-    </div>
-  </a>
+<div class="rno-adm-wrap">
+  <nav class="rno-breadcrumb"><a href="/">Home</a><span>/</span><strong>ADM</strong></nav>
 
-  <div class="area-header">
-    <div class="area-icon"><i class="fa-solid {{ area.icone }}"></i></div>
-    <div class="area-info">
-      <h2>Área {{ area.nome }}</h2>
-      <p>{{ area.descricao }} · Regional Norte</p>
+  <section class="rno-adm-hero">
+    <div class="rno-adm-orbit rno-adm-orbit-a"></div><div class="rno-adm-orbit rno-adm-orbit-b"></div>
+    <div class="rno-adm-hero-icon"><i class="fa-solid fa-shield-halved"></i></div>
+    <div class="rno-adm-hero-copy">
+      <span class="rno-adm-kicker">PORTAL DE RELATÓRIOS</span>
+      <h1>Área ADM</h1>
+      <p>Inteligência administrativa, segurança e acompanhamento operacional da Regional Norte.</p>
+    </div>
+    <div class="rno-adm-status"><span></span>Área ativa</div>
+  </section>
+
+  <header class="rno-section-head rno-adm-section-head">
+    <div><h2>SETORES</h2><p>Acesse os módulos que compõem a área administrativa</p></div>
+    <span class="rno-sector-count">2 setores</span>
+  </header>
+
+  <div class="rno-sector-grid">
+    <a class="rno-sector-card rno-sector-active" href="/area/adm/desconexao/">
+      <div class="rno-sector-accent"></div>
+      <div class="rno-sector-icon"><i class="fa-solid fa-plug-circle-xmark"></i></div>
+      <div class="rno-sector-copy">
+        <span class="rno-sector-label">GESTÃO OPERACIONAL</span>
+        <h2>Desconexão</h2>
+        <p>Produtividade, qualidade, recuperação, histórico e evolução das operações de desconexão.</p>
+        <div class="rno-sector-meta"><span><i class="fa-solid fa-chart-simple"></i> 7 dashboards</span><span><i class="fa-solid fa-circle-check"></i> Ativo</span></div>
+      </div>
+      <div class="rno-sector-action"><span>Acessar setor</span><i class="fa-solid fa-arrow-right"></i></div>
+    </a>
+
+    <div class="rno-sector-card rno-sector-security">
+      <div class="rno-sector-accent"></div>
+      <div class="rno-sector-icon"><i class="fa-solid fa-shield"></i></div>
+      <div class="rno-sector-copy">
+        <span class="rno-sector-label">SEGURANÇA OPERACIONAL</span>
+        <h2>Segurança</h2>
+        <p>Gestão de segurança patrimonial, prevenção, acompanhamento e indicadores operacionais.</p>
+        <div class="rno-sector-meta"><span><i class="fa-regular fa-clock"></i> Em evolução</span></div>
+      </div>
+      <div class="rno-sector-action rno-sector-action-disabled"><span>Disponível em breve</span><i class="fa-solid fa-lock"></i></div>
     </div>
   </div>
 
-  <h2 class="section-title">Setores</h2>
-  <div class="cards-grid">
-    {% for setor in area.setores %}
-      {% if setor.ativo %}
-        <a href="{{ url_for('setor_view', area_slug=area.slug, setor_slug=setor.slug) }}" class="card-link">
-          <div class="card">
-            <div class="card-icon {{ setor.cor }}"><i class="fa-solid {{ setor.icone }}"></i></div>
-            <h3 class="card-title">{{ setor.nome }}</h3>
-            <p class="card-desc">{{ setor.descricao }}</p>
-            <div class="card-meta"><span>{{ setor.meta }}</span><i class="fa-solid fa-arrow-right"></i></div>
-          </div>
-        </a>
-      {% else %}
-        <a href="{{ url_for('setor_view', area_slug=area.slug, setor_slug=setor.slug) }}" class="card-link">
-          <div class="card disabled">
-            <div class="card-icon {{ setor.cor }}"><i class="fa-solid {{ setor.icone }}"></i></div>
-            <h3 class="card-title">{{ setor.nome }}</h3>
-            <p class="card-desc">{{ setor.descricao }}</p>
-            <div class="card-meta"><span></span><span class="badge-soon">Em Breve</span></div>
-          </div>
-        </a>
-      {% endif %}
-    {% endfor %}
-  </div>
-</main>
+  <div class="rno-adm-future-note"><i class="fa-solid fa-circle-plus"></i><span>A estrutura está preparada para receber novos setores da Área ADM.</span></div>
+</div>
 {% endblock %}

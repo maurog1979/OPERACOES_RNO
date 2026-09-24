@@ -1,0 +1,28 @@
+<aside class="rno-sidebar" id="rnoSidebar" aria-label="Menu principal">
+  <div class="rno-sidebar-tools">
+    <button class="rno-side-toggle-v44" type="button" data-sidebar-toggle aria-label="Recolher ou expandir menu" title="Recolher ou expandir menu">
+      <i class="fa-solid fa-angles-left"></i><span class="rno-side-text">Recolher menu</span>
+    </button>
+  </div>
+
+  <a class="rno-side-link {% if request.path=='/' %}active{% endif %}" href="/" title="Página inicial">
+    <span class="rno-side-icon"><i class="fa-solid fa-house"></i></span><span class="rno-side-text">Página inicial</span>
+  </a>
+  <div class="rno-side-divider"></div><div class="rno-side-label">Áreas</div>
+  {% set menu=[
+    ('ADM','/area/adm','fa-shield-halved'),('OMR','/area/omr','fa-tower-broadcast'),
+    ('INFRA','/area/infra','fa-screwdriver-wrench'),('IMPLANTAÇÃO','/area/implantacao','fa-square-plus'),
+    ('REDE EXTERNA','/area/rede-externa','fa-share-nodes'),('RESIDENCIAL','/area/residencial','fa-house'),
+    ('EMPRESARIAL','/area/empresarial','fa-building'),('BACKBONE','/area/backbone','fa-cloud')
+  ] %}
+  {% for label,href,icon in menu %}
+  <a class="rno-side-link {% if request.path.startswith(href) %}active{% endif %}" href="{{ href }}" title="{{ label }}">
+    <span class="rno-side-icon"><i class="fa-solid {{ icon }}"></i></span><span class="rno-side-text">{{ label }}</span>
+  </a>
+  {% endfor %}
+
+  <div class="rno-side-divider"></div><div class="rno-side-label">Acessos rápidos</div>
+  <a class="rno-side-link" href="/dash/executivo/" title="Visão Executiva"><span class="rno-side-icon"><i class="fa-solid fa-chart-column"></i></span><span class="rno-side-text">Visão Executiva</span></a>
+  <a class="rno-side-link {% if request.path.startswith('/area/adm/desconexao') %}active{% endif %}" href="/area/adm/desconexao/" title="Desconexão"><span class="rno-side-icon"><i class="fa-solid fa-plug-circle-xmark"></i></span><span class="rno-side-text">Desconexão</span></a>
+  <div class="rno-side-brand"><img src="{{ url_for('static',filename='img/brand/claro-symbol-auto.png') }}" alt="Claro"></div>
+</aside>

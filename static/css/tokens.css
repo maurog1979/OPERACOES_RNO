@@ -1,0 +1,8 @@
+:root{
+ --rno-red:#e30613;--rno-red-2:#f22b35;--rno-red-dark:#b50711;
+ --rno-ink:#131a2c;--rno-text:#344054;--rno-muted:#667085;
+ --rno-canvas:#f4f6fa;--rno-surface:#fff;--rno-line:#e5e8ef;
+ --rno-sidebar:#141b29;--rno-success:#12a36d;--rno-warning:#f0a018;
+ --rno-topbar:72px;--rno-sidebar-w:240px;--rno-sidebar-mini:74px;
+ --rno-radius:14px;--rno-shadow:0 8px 26px rgba(16,24,40,.075);
+}
