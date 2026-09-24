@@ -1,16 +1,33 @@
+# =====================================================================
+# PORTAL OPERACOES RNO
+# .gitignore
+# =====================================================================
+# CORRECOES NESTA VERSAO
+#   1. A regra *.sql bloqueava o DDL do Data Mart. Agora ha excecao
+#      para database/ e docs/database/, que sao CODIGO, nao dump.
+#   2. Removidos tres blocos duplicados no final do arquivo.
+#   3. Acrescentadas as pastas de saida do ETL do Data Mart.
+# =====================================================================
+
+# ---------------------------------------------------------------------
 # Python
+# ---------------------------------------------------------------------
 __pycache__/
 *.py[cod]
 *$py.class
 .python-version
 
+# ---------------------------------------------------------------------
 # Ambientes virtuais
+# ---------------------------------------------------------------------
 .venv/
 venv/
 env/
 ENV/
 
+# ---------------------------------------------------------------------
 # Flask e configuracao local
+# ---------------------------------------------------------------------
 instance/
 .flaskenv
 .webassets-cache
@@ -26,16 +43,33 @@ credentials.json
 id_rsa
 id_rsa.pub
 
+# ---------------------------------------------------------------------
 # Bancos, dumps e backups
+#
+# ATENCAO: *.sql ignora tudo, mas os scripts de DDL e migracao SAO
+# codigo-fonte e precisam ser versionados. Por isso as excecoes.
+# ---------------------------------------------------------------------
 *.sql
 *.sqlite
 *.sqlite3
 *.db
+
+# excecoes: scripts de estrutura do banco
+!database/*.sql
+!database/**/*.sql
+!docs/database/*.sql
+!docs/database/**/*.sql
+
+# dumps continuam ignorados mesmo dentro das pastas acima
 database/backups/
+database/dumps/
+docs/database/dumps/
 backups/
 dumps/
 
+# ---------------------------------------------------------------------
 # Cache, logs e relatorios gerados
+# ---------------------------------------------------------------------
 .cache/
 .pytest_cache/
 .mypy_cache/
@@ -43,9 +77,18 @@ dumps/
 htmlcov/
 *.log
 logs/
-reports/generated/
 
+# saida dos scripts de diagnostico
+diagnostico/
+etl/diagnostico/
+etl/logs/
+reports/generated/
+reports/repository/
+
+# ---------------------------------------------------------------------
 # Backups locais
+# O historico do Git ja e o backup. Nao versionar copias manuais.
+# ---------------------------------------------------------------------
 *.bak
 *.backup
 *.bkp
@@ -59,7 +102,20 @@ reports/generated/
 *.com_erro*
 *.quebrado*
 
+# ---------------------------------------------------------------------
+# Scripts temporarios de correcao
+# Patches de uso unico, que ja cumpriram o papel
+# ---------------------------------------------------------------------
+patch_*.py
+fix_*.py
+corrigir_*.py
+aplicar_*.py
+organizar_repositorio*.py
+validar_organizacao*.py
+
+# ---------------------------------------------------------------------
 # Editores e sistema operacional
+# ---------------------------------------------------------------------
 .vscode/
 .idea/
 *.code-workspace
@@ -70,7 +126,9 @@ Desktop.ini
 $RECYCLE.BIN/
 .DS_Store
 
-# Node e saidas
+# ---------------------------------------------------------------------
+# Node e saidas de build
+# ---------------------------------------------------------------------
 node_modules/
 npm-debug.log*
 yarn-debug.log*
@@ -80,17 +138,15 @@ test-results/
 output/
 dist/
 build/
-organizar_repositorio*.py
-validar_organizacao*.py
 
-# Historico local preservado pela branch archive
+# ---------------------------------------------------------------------
+# Historico local preservado na branch archive
+# ---------------------------------------------------------------------
 legacy/
-reports/repository/
 
+# ---------------------------------------------------------------------
 # Arquivos locais ainda nao prontos para versionamento
+# ---------------------------------------------------------------------
 database/scripts/carregar_municipios.py
-reports/repository/
-
-# Arquivos locais ainda nao prontos para versionamento
-database/scripts/carregar_municipios.py
-reports/repository/
+docs/database/scripts/carregar_municipios.py 
+reports/ 
