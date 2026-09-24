@@ -399,15 +399,20 @@ def api_refresh():
         """, params=p)
 
         # ---------------- G4: motivos ----------------
+        # DENOMINADOR_G4_G6_CORRIGIDO
+        # eventos = todos os eventos associados ao motivo
+        # quebras = apenas eventos COM QUEBRA DE AGENDA
+        # Nao filtrar NM_TIPO_TRATAMENTO no WHERE.
         df_g4 = query(f"""
             SELECT q.NM_MOTIVO_REAGENDA                  AS rotulo,
                    COUNT(DISTINCT q.ID_QUEBRA)           AS eventos,
-                   COUNT(DISTINCT q.ID_QUEBRA)           AS quebras,
+                   COUNT(DISTINCT CASE
+                         WHEN q.NM_TIPO_TRATAMENTO = '{QUEBRA}'
+                         THEN q.ID_QUEBRA END)           AS quebras,
                    COUNT(DISTINCT s.CD_NET)              AS contratos
             FROM ft_safra_historico s
             {JOIN_QUEBRA_INNER}
             WHERE {where}
-              AND q.NM_TIPO_TRATAMENTO = '{QUEBRA}'
               AND q.NM_MOTIVO_REAGENDA IS NOT NULL
               AND TRIM(q.NM_MOTIVO_REAGENDA) <> ''
             GROUP BY q.NM_MOTIVO_REAGENDA
@@ -430,15 +435,20 @@ def api_refresh():
         """, params=p)
 
         # ---------------- G6: responsavel ----------------
+        # DENOMINADOR_G4_G6_CORRIGIDO
+        # eventos = todos os eventos associados ao responsavel
+        # quebras = apenas eventos COM QUEBRA DE AGENDA
+        # Nao filtrar NM_TIPO_TRATAMENTO no WHERE.
         df_g6 = query(f"""
             SELECT q.NM_QUEBRA_RESPONSAVEL               AS rotulo,
                    COUNT(DISTINCT q.ID_QUEBRA)           AS eventos,
-                   COUNT(DISTINCT q.ID_QUEBRA)           AS quebras,
+                   COUNT(DISTINCT CASE
+                         WHEN q.NM_TIPO_TRATAMENTO = '{QUEBRA}'
+                         THEN q.ID_QUEBRA END)           AS quebras,
                    COUNT(DISTINCT s.CD_NET)              AS contratos
             FROM ft_safra_historico s
             {JOIN_QUEBRA_INNER}
             WHERE {where}
-              AND q.NM_TIPO_TRATAMENTO = '{QUEBRA}'
               AND q.NM_QUEBRA_RESPONSAVEL IS NOT NULL
               AND TRIM(q.NM_QUEBRA_RESPONSAVEL) <> ''
             GROUP BY q.NM_QUEBRA_RESPONSAVEL
