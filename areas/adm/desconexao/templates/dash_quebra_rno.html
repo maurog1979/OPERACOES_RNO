@@ -1,0 +1,710 @@
+{% extends "base.html" %}
+{% block title %}Quebra de Agenda{% endblock %}
+{% block content %}
+
+<!--
+=====================================================================
+PORTAL OPERACOES RNO
+areas/adm/desconexao/templates/dash_quebra_rno.html
+Quebra de Agenda - os contratos da Safra na lente da quebra
+=====================================================================
+PADRAO VISUAL
+  Segue o dash_quebra existente:
+    cantos arredondados de 18 a 22px
+    sombras suaves
+    botoes em pill (border-radius 999px)
+    hero com eyebrow, titulo e subtitulo
+    tres modos: Quantidade, Taxa, Representatividade
+    atalhos de teclado Q, T, R
+    Choices.js com tags vermelhas
+    overlay de loading com backdrop-filter
+
+CONCEITO
+  A base e a SAFRA. A Quebra e a lente.
+  Os KPIs deixam explicito o universo analisado.
+
+ONDE SALVAR
+  areas\adm\desconexao\templates\dash_quebra_rno.html
+=====================================================================
+-->
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css">
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+
+<style>
+:root{
+  --claro-red:#E60000; --claro-dark:#B71C1C; --card:#FFFFFF;
+  --text:#202234; --muted:#6C757D; --line:rgba(0,0,0,.07);
+  --blue:#1976D2; --green:#2E7D32; --yellow:#F9A825;
+  --soft-muted:#81879A;
+}
+
+.q-wrap{width:min(1760px,calc(100vw - 44px));margin:0 auto;padding:14px 0 30px}
+
+.q-topbar{display:flex;justify-content:space-between;align-items:center;
+  gap:14px;margin-bottom:10px}
+.q-breadcrumb{color:#8B8EA1;font-size:11px;font-weight:850;
+  letter-spacing:.15em;text-transform:uppercase}
+.q-actions{display:flex;gap:8px;align-items:center}
+.q-nav-btn{border:1px solid var(--line);background:#fff;color:#3A3F4B;
+  min-height:34px;padding:8px 12px;border-radius:999px;font-size:12.5px;
+  font-weight:900;text-decoration:none!important;display:inline-flex;
+  align-items:center;gap:7px;cursor:pointer;
+  box-shadow:0 8px 22px rgba(19,24,44,.055)}
+.q-nav-btn:hover{color:var(--claro-red);border-color:rgba(230,0,0,.18)}
+.q-nav-btn.primary{background:linear-gradient(135deg,#E60000,#B71C1C);
+  color:#fff;border-color:rgba(230,0,0,.16);
+  box-shadow:0 12px 28px rgba(230,0,0,.18)}
+
+.q-hero{background:#fff;border:1px solid var(--line);border-radius:22px;
+  padding:18px 20px;box-shadow:0 14px 38px rgba(25,30,55,.055);
+  margin-bottom:14px;display:flex;justify-content:space-between;
+  gap:18px;align-items:center}
+.q-titlebox{border-left:5px solid var(--claro-red);padding-left:14px}
+.q-eyebrow{color:var(--claro-red);font-size:11px;font-weight:950;
+  letter-spacing:.17em;text-transform:uppercase;margin-bottom:4px}
+.q-title{margin:0;color:var(--text);font-size:clamp(25px,2vw,36px);
+  font-weight:950;letter-spacing:-.045em;line-height:1.03}
+.q-sub{margin:6px 0 0;color:var(--muted);font-size:14px;
+  font-weight:650;line-height:1.35}
+.q-status{font-size:12px;color:#6C757D;font-weight:850;background:#F8F9FA;
+  border:1px solid var(--line);border-radius:999px;padding:9px 13px;
+  white-space:nowrap}
+
+/* faixa do universo analisado */
+.q-universo{background:#202234;color:#fff;border-radius:16px;
+  padding:12px 18px;margin-bottom:14px;display:flex;
+  justify-content:space-between;align-items:center;gap:14px;
+  flex-wrap:wrap;font-size:13px;font-weight:700}
+.q-universo b{font-size:17px;font-weight:950;letter-spacing:-.02em}
+.q-universo .ctx{opacity:.7;font-size:11.5px;font-weight:700}
+
+.q-panel{background:#fff;border:1px solid var(--line);border-radius:20px;
+  padding:14px;box-shadow:0 12px 32px rgba(25,30,55,.045);margin-bottom:14px}
+
+.filters-grid{display:grid;grid-template-columns:repeat(7,minmax(120px,1fr));
+  gap:10px;align-items:end}
+.f-label{display:block;color:#555D6A;font-size:11.5px;font-weight:900;
+  margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em}
+
+.choices__inner{min-height:38px!important;border-radius:13px!important;
+  border-color:rgba(0,0,0,.09)!important;background:#fff!important;
+  font-size:12.5px!important}
+.choices__list--multiple .choices__item{background:#E60000!important;
+  border-color:#E60000!important;border-radius:999px!important;
+  font-size:11px!important;font-weight:850!important}
+.choices__list--dropdown .choices__item--selectable.is-highlighted{
+  background:#FCE4EC!important;color:#B71C1C!important}
+.is-focused .choices__inner,.is-open .choices__inner{
+  border-color:#E60000!important;
+  box-shadow:0 0 0 .15rem rgba(230,0,0,.12)!important}
+
+.mode-row{display:flex;justify-content:space-between;align-items:center;
+  gap:12px;margin-top:12px;flex-wrap:wrap}
+.mode-group{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.mode-btn{border:1px solid var(--line);background:#fff;color:#4B5563;
+  border-radius:999px;padding:8px 13px;font-size:12.5px;font-weight:950;
+  cursor:pointer}
+.mode-btn.active{background:linear-gradient(135deg,#E60000,#B71C1C);
+  color:#fff;border-color:#E60000;box-shadow:0 10px 22px rgba(230,0,0,.16)}
+.hint{color:#8B8EA1;font-size:12px;font-weight:700}
+
+.kpi-grid{display:grid;grid-template-columns:repeat(5,minmax(160px,1fr));
+  gap:12px;margin-bottom:14px}
+.kpi{background:#fff;border:1px solid var(--line);border-radius:18px;
+  padding:16px 17px;box-shadow:0 12px 30px rgba(25,30,55,.045);
+  border-top:4px solid var(--claro-red)}
+.kpi:nth-child(2){border-top-color:var(--blue)}
+.kpi:nth-child(3){border-top-color:var(--yellow)}
+.kpi:nth-child(4){border-top-color:var(--green)}
+.kpi:nth-child(5){border-top-color:var(--soft-muted)}
+.kpi-label{color:#717789;font-size:11.5px;font-weight:900;
+  text-transform:uppercase;letter-spacing:.05em}
+.kpi-value{margin-top:7px;color:var(--text);font-size:26px;
+  font-weight:950;letter-spacing:-.04em}
+.kpi-sub{margin-top:3px;color:#9AA0AE;font-size:11px;font-weight:700}
+
+.charts-grid{display:grid;grid-template-columns:repeat(2,minmax(360px,1fr));
+  gap:14px}
+.chart-card{background:#fff;border:1px solid var(--line);border-radius:20px;
+  padding:14px;box-shadow:0 12px 32px rgba(25,30,55,.045);min-height:365px}
+.chart-title{margin:0 0 8px;color:#202234;font-size:15px;font-weight:950;
+  letter-spacing:-.02em;display:flex;align-items:center;gap:8px}
+.chart-title:before{content:"";width:5px;height:18px;border-radius:999px;
+  background:var(--claro-red);display:inline-block}
+.plot{height:315px}
+
+/* consulta por contrato */
+.q-consulta{background:#fff;border:1px solid var(--line);border-radius:20px;
+  padding:16px 18px;box-shadow:0 12px 32px rgba(25,30,55,.045);
+  margin-bottom:14px}
+.q-busca{display:flex;gap:10px;max-width:480px;margin-top:10px}
+.q-busca input{flex:1;border:1px solid rgba(0,0,0,.09);border-radius:13px;
+  padding:10px 14px;font-size:13px;font-weight:700;color:var(--text)}
+.q-busca input:focus{outline:none;border-color:#E60000;
+  box-shadow:0 0 0 .15rem rgba(230,0,0,.12)}
+.q-busca button{border:none;border-radius:999px;padding:10px 22px;
+  background:linear-gradient(135deg,#E60000,#B71C1C);color:#fff;
+  font-size:12.5px;font-weight:950;cursor:pointer;
+  box-shadow:0 10px 22px rgba(230,0,0,.16)}
+
+.ident-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));
+  gap:14px;margin-top:6px}
+.ident-grid .rot{color:#9AA0AE;font-size:10.5px;font-weight:900;
+  text-transform:uppercase;letter-spacing:.05em}
+.ident-grid .val{color:var(--text);font-size:13.5px;font-weight:850;
+  margin-top:2px}
+
+.resumo-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));
+  gap:10px;margin-top:12px}
+.resumo-grid .item{background:#F8F9FA;border:1px solid var(--line);
+  border-radius:14px;padding:12px;text-align:center}
+.resumo-grid .n{font-size:22px;font-weight:950;color:var(--claro-red);
+  letter-spacing:-.03em}
+.resumo-grid .l{font-size:10.5px;color:#9AA0AE;font-weight:900;
+  text-transform:uppercase;margin-top:2px}
+
+.q-tabela{width:100%;border-collapse:collapse;font-size:12.5px}
+.q-tabela thead th{position:sticky;top:0;background:#202234;color:#fff;
+  padding:9px 12px;font-size:11px;font-weight:900;text-align:left;
+  white-space:nowrap;z-index:2;letter-spacing:.03em}
+.q-tabela tbody td{padding:8px 12px;border-bottom:1px solid #F0F1F4;
+  white-space:nowrap;font-weight:650;color:#3A3F4B}
+.q-tabela tbody tr:hover td{background:#FAFBFC}
+.q-scroll{max-height:440px;overflow:auto;border-radius:14px;
+  border:1px solid var(--line)}
+
+.pill{display:inline-block;padding:3px 11px;border-radius:999px;
+  font-size:10.5px;font-weight:900;letter-spacing:.02em}
+.pill.quebra{background:#FFEBEE;color:#C62828}
+.pill.ok{background:#E8F5E9;color:#2E7D32}
+.pill.pend{background:#FFF3E0;color:#E65100}
+
+.loading{position:fixed;inset:0;background:rgba(245,246,250,.82);
+  backdrop-filter:blur(4px);display:none;align-items:center;
+  justify-content:center;z-index:9999}
+.loading-card{background:#fff;border-radius:22px;padding:24px 28px;
+  box-shadow:0 24px 70px rgba(25,30,55,.16);font-weight:950;color:#202234}
+
+.q-vazio{text-align:center;padding:40px 20px;color:#9AA0AE;
+  font-size:13.5px;font-weight:700}
+
+@media(max-width:1400px){.filters-grid{grid-template-columns:repeat(4,1fr)}
+  .kpi-grid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:1280px){.filters-grid{grid-template-columns:repeat(3,1fr)}
+  .charts-grid{grid-template-columns:1fr}}
+@media(max-width:760px){.q-hero,.q-topbar{flex-direction:column;
+  align-items:flex-start}.kpi-grid{grid-template-columns:1fr 1fr}
+  .filters-grid{grid-template-columns:1fr}.q-wrap{width:calc(100vw - 24px)}}
+</style>
+
+<div class="loading" id="loading">
+  <div class="loading-card">Carregando Quebra de Agenda...</div>
+</div>
+
+<div class="q-wrap">
+
+  <div class="q-topbar">
+    <div class="q-breadcrumb">ADM / DESCONEXÃO / QUEBRA DE AGENDA</div>
+    <div class="q-actions">
+      <button type="button" class="q-nav-btn" onclick="if (window.history.length > 1) { window.history.back(); } else { window.location.href = '/area/adm/desconexao/'; }">← Voltar</button>
+      <a class="q-nav-btn" href="/area/adm/desconexao/">Hub Desconexão</a>
+      <a class="q-nav-btn primary" href="/">Página inicial</a>
+    </div>
+  </div>
+
+  <section class="q-hero">
+    <div class="q-titlebox">
+      <div class="q-eyebrow">Portal Operações RNO</div>
+      <h1 class="q-title">Quebra de Agenda</h1>
+      <p class="q-sub">Como os contratos da Safra se comportam na quebra de agenda — por mês, cidade, motivo, parceira e responsável.</p>
+    </div>
+    <div class="q-status" id="statusText">Cache: verificando...</div>
+  </section>
+
+  <!-- ===== UNIVERSO ANALISADO ===== -->
+  <div class="q-universo" id="universo">
+    <span>Carregando...</span>
+  </div>
+
+  <!-- ===== FILTROS ===== -->
+  <section class="q-panel">
+    <div class="filters-grid">
+      <div><label class="f-label">Mês</label>
+        <select id="meses" multiple></select></div>
+      <div><label class="f-label">Safra</label>
+        <select id="safras" multiple></select></div>
+      <div><label class="f-label">Situação</label>
+        <select id="situacao" multiple></select></div>
+      <div><label class="f-label">Tipo</label>
+        <select id="tipos" multiple></select></div>
+      <div><label class="f-label">UF</label>
+        <select id="ufs" multiple></select></div>
+      <div><label class="f-label">Cidade</label>
+        <select id="cids" multiple></select></div>
+      <div><label class="f-label">Parceira</label>
+        <select id="parcs" multiple></select></div>
+    </div>
+    <div class="mode-row">
+      <div class="mode-group" aria-label="Modo de visualização">
+        <button class="mode-btn active" data-mode="quantidade">Quantidade</button>
+        <button class="mode-btn" data-mode="taxa">Taxa</button>
+        <button class="mode-btn" data-mode="representatividade">Representatividade</button>
+      </div>
+      <div class="hint">Atalhos: Q Quantidade · T Taxa · R Representatividade</div>
+    </div>
+  </section>
+
+  <!-- ===== KPIs ===== -->
+  <section class="kpi-grid">
+    <div class="kpi">
+      <div class="kpi-label">Com Quebra</div>
+      <div class="kpi-value" id="kpiQuebra">0</div>
+      <div class="kpi-sub" id="kpiQuebraSub">eventos</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Total de Eventos</div>
+      <div class="kpi-value" id="kpiEventos">0</div>
+      <div class="kpi-sub" id="kpiEventosSub">ordens de serviço</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">% Quebra</div>
+      <div class="kpi-value" id="kpiTaxa">0,0%</div>
+      <div class="kpi-sub">quebras ÷ eventos</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Contratos Afetados</div>
+      <div class="kpi-value" id="kpiContrQuebra">0</div>
+      <div class="kpi-sub" id="kpiContrSub">da Safra</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Sem Evento</div>
+      <div class="kpi-value" id="kpiSemEvento">0</div>
+      <div class="kpi-sub">contratos fora da quebra</div>
+    </div>
+  </section>
+
+  <!-- ===== GRAFICOS ===== -->
+  <section class="charts-grid">
+    <div class="chart-card">
+      <h2 class="chart-title">G1 · Evolução Mensal</h2>
+      <div id="g1" class="plot"></div>
+    </div>
+    <div class="chart-card">
+      <h2 class="chart-title">G2 · Por Safra</h2>
+      <div id="g2" class="plot"></div>
+    </div>
+    <div class="chart-card">
+      <h2 class="chart-title">G3 · Top 10 Cidades</h2>
+      <div id="g3" class="plot"></div>
+    </div>
+    <div class="chart-card">
+      <h2 class="chart-title">G4 · Top 10 Motivos</h2>
+      <div id="g4" class="plot"></div>
+    </div>
+    <div class="chart-card">
+      <h2 class="chart-title">G5 · Parceiras</h2>
+      <div id="g5" class="plot"></div>
+    </div>
+    <div class="chart-card">
+      <h2 class="chart-title">G6 · Responsável pela Quebra</h2>
+      <div id="g6" class="plot"></div>
+    </div>
+  </section>
+
+  <!-- ===== CONSULTA POR CONTRATO ===== -->
+  <section class="q-consulta">
+    <div class="q-eyebrow">Consulta</div>
+    <h2 style="margin:2px 0 0;font-size:17px;font-weight:950;
+               letter-spacing:-.03em;color:var(--text)">
+      Histórico de quebra por contrato</h2>
+    <div class="q-busca">
+      <input type="text" id="inpContrato" placeholder="Número do contrato (CD_NET)">
+      <button id="btnBuscar">Buscar</button>
+    </div>
+  </section>
+
+  <div id="resConsulta"></div>
+
+</div>
+
+<script>
+(function(){
+
+  // =================================================================
+  // CONFIGURACAO
+  // =================================================================
+  const API = "/dash/quebra-rno/api";
+  const ids = ['meses','safras','situacao','tipos','ufs','cids','parcs'];
+  const rotulos = {
+    meses:'Mês', safras:'Safra', situacao:'Situação', tipos:'Tipo',
+    ufs:'UF', cids:'Cidade', parcs:'Parceira'
+  };
+
+  const choices = {};
+  let _updating = false;
+  let controller = null;
+  let currentMode = 'quantidade';
+  let ultimoKpis = null;
+
+  const fmtInt = new Intl.NumberFormat('pt-BR');
+  const loading = document.getElementById('loading');
+
+  function showLoading(flag){ loading.style.display = flag ? 'flex' : 'none'; }
+  function fmtPct(v){ return Number(v||0).toFixed(1).replace('.',',') + '%'; }
+
+  // =================================================================
+  // CHOICES
+  // =================================================================
+  function selected(id){
+    const c = choices[id];
+    if (!c) return [];
+    return c.getValue(true).filter(Boolean);
+  }
+
+  function queryParams(){
+    const params = new URLSearchParams();
+    params.set('mode', currentMode);
+    ids.forEach(id => selected(id).forEach(v => params.append(id, v)));
+    return params;
+  }
+
+  function setOptions(id, values){
+    const c = choices[id];
+    if (!c) return;
+    const keep = new Set(selected(id));
+    const opts = (values||[]).map(v => ({
+      value:String(v), label:String(v), selected:keep.has(String(v))
+    }));
+    _updating = true;
+    c.clearStore();
+    c.setChoices(opts, 'value', 'label', true);
+    _updating = false;
+  }
+
+  function initChoices(){
+    ids.forEach(id => {
+      choices[id] = new Choices(document.getElementById(id), {
+        removeItemButton:true, shouldSort:false, searchEnabled:true,
+        placeholder:true, placeholderValue:'Todos', itemSelectText:'',
+        noResultsText:'Sem resultados', noChoicesText:'Sem opções'
+      });
+      document.getElementById(id).addEventListener('addItem',
+        () => { if (!_updating) refresh(); });
+      document.getElementById(id).addEventListener('removeItem',
+        () => { if (!_updating) refresh(); });
+    });
+  }
+
+  // =================================================================
+  // UNIVERSO
+  // =================================================================
+  function updateUniverso(k){
+    const sel = ids
+      .map(id => ({id, vals:selected(id)}))
+      .filter(x => x.vals.length);
+
+    const ctx = sel.length
+      ? sel.map(x => rotulos[x.id] + ': ' + (x.vals.length > 2
+          ? x.vals.length + ' selecionados' : x.vals.join(', '))).join(' · ')
+      : 'Sem filtro · ' + fmtInt.format(k.municipios||0) + ' municípios · '
+        + fmtInt.format(k.parceiras||0) + ' parceiras';
+
+    document.getElementById('universo').innerHTML =
+      '<span>Universo analisado: <b>' + fmtInt.format(k.linhas||0) +
+      '</b> linhas da Safra · <b>' + fmtInt.format(k.contratos||0) +
+      '</b> contratos</span><span class="ctx">' + ctx + '</span>';
+  }
+
+  // =================================================================
+  // KPIs
+  // =================================================================
+  function updateKpis(k){
+    ultimoKpis = k;
+    document.getElementById('kpiQuebra').textContent =
+      fmtInt.format(k.quebras||0);
+    document.getElementById('kpiQuebraSub').textContent =
+      'de ' + fmtInt.format(k.eventos||0) + ' eventos';
+    document.getElementById('kpiEventos').textContent =
+      fmtInt.format(k.eventos||0);
+    document.getElementById('kpiEventosSub').textContent =
+      fmtInt.format(k.sem_quebra||0) + ' sem quebra';
+    document.getElementById('kpiTaxa').textContent =
+      k.taxa_quebra_label || '0,0%';
+    document.getElementById('kpiContrQuebra').textContent =
+      fmtInt.format(k.contr_quebra||0);
+    document.getElementById('kpiContrSub').textContent =
+      k.pct_contratos_label + ' dos contratos';
+    document.getElementById('kpiSemEvento').textContent =
+      fmtInt.format(k.sem_evento||0);
+    updateUniverso(k);
+  }
+
+  // =================================================================
+  // GRAFICOS
+  // =================================================================
+  function modeLabel(){
+    if (currentMode === 'taxa') return 'Taxa (%)';
+    if (currentMode === 'representatividade') return 'Representatividade (%)';
+    return 'Quantidade de quebras';
+  }
+
+  function pickColors(n){
+    const arr = Array(n).fill('#ADB5BD');
+    if (n > 0) arr[0] = '#E60000';
+    if (n > 1) arr[1] = '#1976D2';
+    if (n > 2) arr[2] = '#F9A825';
+    if (n > 3) arr[3] = '#2E7D32';
+    return arr;
+  }
+
+  function renderBar(id, data){
+    const horizontal = ['g3','g4','g5','g6'].includes(id);
+    const labels = data.labels || [];
+    const values = data.values || [];
+    const custom = data.customdata || [];
+
+    if (!labels.length){
+      Plotly.purge(id);
+      document.getElementById(id).innerHTML =
+        '<div class="q-vazio">Sem dados para os filtros</div>';
+      return;
+    }
+
+    const eixo = horizontal ? '%{y}' : '%{x}';
+    const valor = horizontal ? '%{x:,.0f}' : '%{y:,.0f}';
+    const valorPct = horizontal ? '%{x:.2f}' : '%{y:.2f}';
+
+    const linhaValor = currentMode === 'quantidade'
+      ? '<b>Quebras:</b> ' + valor + '<br>'
+      : '<b>' + modeLabel() + ':</b> ' + valorPct + '%<br>';
+
+    const trace = {
+      type:'bar',
+      orientation: horizontal ? 'h' : 'v',
+      x: horizontal ? values : labels,
+      y: horizontal ? labels : values,
+      customdata: custom,
+      marker:{color:pickColors(values.length),
+              line:{color:'rgba(0,0,0,.04)',width:1}},
+      hovertemplate:'<b>' + eixo + '</b><br>' + linhaValor +
+        '<b>Eventos:</b> %{customdata.eventos:,.0f}<br>' +
+        '<b>Quebras:</b> %{customdata.quebras:,.0f}<br>' +
+        '<b>Taxa:</b> %{customdata.taxa:.2f}%<br>' +
+        '<b>Representatividade:</b> %{customdata.representatividade:.2f}%<br>' +
+        '<b>Contratos:</b> %{customdata.contratos:,.0f}<extra></extra>',
+      text: values.map(v => currentMode === 'quantidade'
+        ? fmtInt.format(v)
+        : (Number(v).toFixed(1).replace('.',',') + '%')),
+      textposition:'auto',
+      cliponaxis:false
+    };
+
+    const layout = {
+      margin: horizontal ? {l:175,r:28,t:12,b:34} : {l:56,r:20,t:12,b:52},
+      paper_bgcolor:'#FFFFFF', plot_bgcolor:'#FFFFFF',
+      font:{family:'Inter, Arial, sans-serif', color:'#343A40', size:12},
+      xaxis:{title: horizontal ? modeLabel() : '',
+             gridcolor:'#EEF0F4', zeroline:false,
+             tickangle: horizontal ? 0 : -25},
+      yaxis:{title: horizontal ? '' : modeLabel(),
+             gridcolor:'#EEF0F4', zeroline:false, automargin:true},
+      hoverlabel:{bgcolor:'#202234', font:{color:'#FFFFFF'},
+                  bordercolor:'#202234'},
+      bargap:.25
+    };
+
+    Plotly.react(id, [trace], layout, {displayModeBar:false, responsive:true});
+  }
+
+  // =================================================================
+  // STATUS
+  // =================================================================
+  async function status(){
+    try{
+      const r = await fetch(API + '/status');
+      const j = await r.json();
+      const rows = j.rows ? fmtInt.format(j.rows) : '0';
+      document.getElementById('statusText').textContent =
+        j.loaded ? ('Quebra: ' + rows + ' eventos · ' + (j.meses||0) + ' meses')
+                 : 'Cache: aguardando carga';
+    } catch(e){
+      document.getElementById('statusText').textContent = 'Cache: indisponível';
+    }
+  }
+
+  // =================================================================
+  // REFRESH
+  // =================================================================
+  async function refresh(){
+    if (controller) controller.abort();
+    controller = new AbortController();
+    showLoading(true);
+
+    try{
+      const r = await fetch(API + '/refresh?' + queryParams().toString(),
+                            {signal: controller.signal});
+      const j = await r.json();
+
+      if (!j.ok) throw new Error(j.error || 'Falha no refresh');
+
+      ids.forEach(id => setOptions(id, j.options[id] || []));
+      updateKpis(j.kpis || {});
+      Object.entries(j.charts || {}).forEach(([id, data]) => renderBar(id, data));
+
+      const rows = j.diag && j.diag.rows ? fmtInt.format(j.diag.rows) : '';
+      document.getElementById('statusText').textContent =
+        rows ? ('Eventos no filtro: ' + rows) : 'Sem eventos';
+
+    } catch(e){
+      if (e.name !== 'AbortError'){
+        console.error(e);
+        document.getElementById('statusText').textContent = 'Erro: ' + e.message;
+      }
+    } finally {
+      showLoading(false);
+    }
+  }
+
+  // =================================================================
+  // MODO
+  // =================================================================
+  function setMode(mode){
+    currentMode = mode;
+    document.querySelectorAll('.mode-btn').forEach(btn =>
+      btn.classList.toggle('active', btn.dataset.mode === mode));
+    refresh();
+  }
+
+  document.querySelectorAll('.mode-btn').forEach(btn =>
+    btn.addEventListener('click', () => setMode(btn.dataset.mode)));
+
+  document.addEventListener('keydown', (ev) => {
+    if (ev.target && ['INPUT','TEXTAREA','SELECT'].includes(ev.target.tagName))
+      return;
+    const k = ev.key.toLowerCase();
+    if (k === 'q') setMode('quantidade');
+    if (k === 't') setMode('taxa');
+    if (k === 'r') setMode('representatividade');
+  });
+
+  // =================================================================
+  // CONSULTA POR CONTRATO
+  // =================================================================
+  async function buscar(){
+    const c = document.getElementById('inpContrato').value.trim();
+    const area = document.getElementById('resConsulta');
+    if (!c){ area.innerHTML = ''; return; }
+
+    area.innerHTML = '<div class="q-panel"><div class="q-vazio">Buscando...</div></div>';
+
+    try{
+      const r = await fetch(API + '/consulta?contrato=' + encodeURIComponent(c));
+      const j = await r.json();
+
+      if (!j.ok){
+        area.innerHTML = '<div class="q-panel"><div class="q-vazio">' +
+                         j.erro + '</div></div>';
+        return;
+      }
+      if (!j.encontrado){
+        area.innerHTML = '<div class="q-panel"><div class="q-vazio">Contrato <b>' +
+                         c + '</b> não encontrado</div></div>';
+        return;
+      }
+
+      const i = j.identificacao, rs = j.resumo;
+      let h = '';
+
+      // identificacao
+      h += '<section class="q-panel"><div class="q-eyebrow">Contrato ' +
+           i.contrato + '</div><div class="ident-grid">' +
+           '<div><div class="rot">Operadora</div><div class="val">' + i.operadora + '</div></div>' +
+           '<div><div class="rot">Município</div><div class="val">' + i.municipio + '</div></div>' +
+           '<div><div class="rot">UF</div><div class="val">' + i.uf + '</div></div>' +
+           '<div><div class="rot">Regional</div><div class="val">' + i.regional + '</div></div>' +
+           '<div><div class="rot">Cluster</div><div class="val">' + i.cluster + '</div></div>' +
+           '<div><div class="rot">Parceira</div><div class="val">' + i.parceira + '</div></div>' +
+           '<div><div class="rot">Status</div><div class="val">' + i.status + '</div></div>' +
+           '</div>';
+
+      // resumo
+      h += '<div class="resumo-grid">' +
+           '<div class="item"><div class="n">' + rs.eventos + '</div>' +
+             '<div class="l">eventos</div></div>' +
+           '<div class="item"><div class="n">' + rs.com_quebra + '</div>' +
+             '<div class="l">com quebra</div></div>' +
+           '<div class="item"><div class="n">' + rs.sem_quebra + '</div>' +
+             '<div class="l">sem quebra</div></div>' +
+           '<div class="item"><div class="n">' + fmtPct(rs.taxa) + '</div>' +
+             '<div class="l">taxa</div></div>' +
+           '<div class="item"><div class="n">' + rs.linhas_safra + '</div>' +
+             '<div class="l">linhas safra</div></div>' +
+           '<div class="item"><div class="n">' + rs.meses + '</div>' +
+             '<div class="l">meses</div></div>' +
+           '</div></section>';
+
+      // safra
+      if (j.safra.length){
+        h += '<section class="q-panel"><h2 class="chart-title">Situação na Safra</h2>' +
+             '<div class="q-scroll"><table class="q-tabela"><thead><tr>' +
+             '<th>Mês</th><th>Safra</th><th>Tipo</th><th>Situação</th>' +
+             '<th>Dias</th><th>Equipamento</th><th>Serial</th></tr></thead><tbody>';
+        j.safra.forEach(s => {
+          h += '<tr><td>' + s.mes + '</td><td>' + s.safra + '</td>' +
+               '<td>' + s.tipo + '</td>' +
+               '<td><span class="pill ' + (s.pendencia === 'RECUPERADO' ? 'ok' : 'pend') +
+               '">' + s.pendencia + '</span></td>' +
+               '<td>' + fmtInt.format(s.dias) + '</td>' +
+               '<td>' + s.equipamento + '</td><td>' + s.serial + '</td></tr>';
+        });
+        h += '</tbody></table></div></section>';
+      }
+
+      // eventos de quebra
+      if (j.eventos.length){
+        h += '<section class="q-panel"><h2 class="chart-title">Eventos de Quebra · ' +
+             j.eventos.length + '</h2>' +
+             '<div class="q-scroll"><table class="q-tabela"><thead><tr>' +
+             '<th>Data</th><th>OS</th><th>Tratamento</th><th>Status</th>' +
+             '<th>Motivo</th><th>Responsável</th><th>Cenário</th>' +
+             '<th>Parceira</th><th>Técnico</th><th>Bairro</th>' +
+             '</tr></thead><tbody>';
+        j.eventos.forEach(e => {
+          const cq = e.tratamento.indexOf('COM QUEBRA') >= 0;
+          h += '<tr><td>' + e.data + '</td><td>' + e.os + '</td>' +
+               '<td><span class="pill ' + (cq ? 'quebra' : 'ok') + '">' +
+               e.tratamento + '</span></td>' +
+               '<td>' + e.status + '</td><td>' + e.motivo + '</td>' +
+               '<td>' + e.responsavel + '</td><td>' + e.cenario + '</td>' +
+               '<td>' + e.parceira + '</td><td>' + e.tecnico + '</td>' +
+               '<td>' + e.bairro + '</td></tr>';
+        });
+        h += '</tbody></table></div></section>';
+      }
+
+      area.innerHTML = h;
+
+    } catch(e){
+      area.innerHTML = '<div class="q-panel"><div class="q-vazio">' +
+                       e.message + '</div></div>';
+    }
+  }
+
+  document.getElementById('btnBuscar').addEventListener('click', buscar);
+  document.getElementById('inpContrato').addEventListener('keypress', e => {
+    if (e.key === 'Enter') buscar();
+  });
+
+  // =================================================================
+  // INICIALIZACAO
+  // =================================================================
+  initChoices();
+  status();
+  refresh();
+
+})();
+</script>
+
+{% endblock %}

@@ -86,6 +86,14 @@ def create_app():
     except Exception as e:
         print(f"[APP] AVISO: nao foi possivel registrar dash_backlog_rno_bp: {e}")
 
+    # ----- dash_quebra_rno (Data Mart desconexao_rno) -----
+    try:
+        from areas.adm.desconexao.dash_quebra_rno import bp as dash_quebra_rno_bp
+        app.register_blueprint(dash_quebra_rno_bp)
+        print("[APP] Blueprint dash_quebra_rno registrado em /dash/quebra-rno/")
+    except Exception as e:
+        print(f"[APP] AVISO: nao foi possivel registrar dash_quebra_rno_bp: {e}")
+
     # =========================================================
     # BLUEPRINTS - ROUTES
     # =========================================================
