@@ -1,0 +1,807 @@
+{% extends "base.html" %}
+{% block title %}Painel Safra{% endblock %}
+
+{% block content %}
+<!--
+=====================================================================
+PORTAL OPERACOES RNO
+areas/adm/desconexao/templates/dash_safra_painel.html
+Painel Safra - 1 M / 4 M / 13 M
+=====================================================================
+ARQUIVO COMPLETO - substitua o anterior inteiro.
+
+O QUE MUDOU
+  1. Grafico agora exibe os PERCENTUAIS acima de cada ponto
+  2. Cards ganharam GAP e FALTAM RECUPERAR
+     (conceitos aproveitados do dash_safra_v8)
+  3. Tabela ganhou coluna GAP em pontos percentuais
+  4. Filtros novos: parceira, regional, subcluster, segmento
+
+ONDE SALVAR
+  areas\adm\desconexao\templates\dash_safra_painel.html
+
+INDICADOR
+  ICG = RECUPERADOS / DESCONECTADOS
+
+FAROL
+  VERDE >= 65%  |  AMARELO 60-65%  |  VERMELHO < 60%
+
+DUAS LEITURAS DE PERCENTUAL
+  % Inad / % Opcao = participacao entre os tipos (somam 100%)
+  ICG              = taxa de recuperacao do proprio tipo
+=====================================================================
+-->
+
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+
+<style>
+:root {
+    --claro-red:   #E60000;
+    --claro-dark:  #B71C1C;
+    --verde:       #2E7D32;
+    --amarelo:     #F9A825;
+    --vermelho:    #C62828;
+    --inad:        #C62828;
+    --opcao:       #1565C0;
+    --cinza-bg:    #F5F6F8;
+    --cinza-borda: #E0E3E7;
+    --texto:       #2C3338;
+    --texto-fraco: #6B7280;
+}
+
+.sp-wrap { padding: 0 4px 24px; }
+
+/* ===== CABECALHO ===== */
+.sp-header {
+    background: linear-gradient(90deg, var(--claro-red), var(--claro-dark));
+    color: #fff; padding: 14px 20px; border-radius: 8px 8px 0 0;
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 12px;
+}
+.sp-header h2 { margin: 0; font-size: 19px; font-weight: 600; }
+.sp-header .sub { font-size: 12px; opacity: .9; margin-top: 2px; }
+
+.sp-tabs { display: flex; gap: 6px; }
+.sp-tab {
+    background: rgba(255,255,255,.18);
+    border: 1px solid rgba(255,255,255,.35);
+    color: #fff; padding: 7px 20px; border-radius: 6px;
+    cursor: pointer; font-size: 13px; font-weight: 600; transition: .15s;
+}
+.sp-tab:hover  { background: rgba(255,255,255,.3); }
+.sp-tab.active { background: #fff; color: var(--claro-red); }
+
+/* ===== FILTROS ===== */
+.sp-filtros {
+    background: #fff; border: 1px solid var(--cinza-borda); border-top: none;
+    padding: 14px 20px;
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px; align-items: end;
+}
+.sp-campo label {
+    display: block; font-size: 10px; font-weight: 600;
+    color: var(--texto-fraco); text-transform: uppercase;
+    letter-spacing: .4px; margin-bottom: 4px;
+}
+.sp-campo select {
+    width: 100%; padding: 7px 9px; border: 1px solid var(--cinza-borda);
+    border-radius: 5px; font-size: 12px; background: #fff;
+}
+.sp-acoes { display: flex; gap: 6px; }
+.sp-btn {
+    background: var(--claro-red); color: #fff; border: none;
+    padding: 8px 16px; border-radius: 5px; cursor: pointer;
+    font-size: 12px; font-weight: 600; white-space: nowrap;
+}
+.sp-btn:hover { background: var(--claro-dark); }
+.sp-btn.sec { background: #6B7280; }
+.sp-btn.sec:hover { background: #4B5563; }
+
+/* ===== CARDS ===== */
+.sp-cards {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+    gap: 10px; margin: 12px 0;
+}
+.sp-card {
+    background: #fff; border: 1px solid var(--cinza-borda);
+    border-left: 4px solid var(--claro-red); border-radius: 6px;
+    padding: 12px 15px;
+}
+.sp-card.verde    { border-left-color: var(--verde); }
+.sp-card.amarelo  { border-left-color: var(--amarelo); }
+.sp-card.vermelho { border-left-color: var(--vermelho); }
+.sp-card .rot {
+    font-size: 10px; color: var(--texto-fraco); text-transform: uppercase;
+    letter-spacing: .4px; font-weight: 600;
+}
+.sp-card .val {
+    font-size: 24px; font-weight: 700; color: var(--texto);
+    line-height: 1.2; margin-top: 3px;
+}
+.sp-card .det { font-size: 10px; color: var(--texto-fraco); margin-top: 3px; }
+.sp-card .val.verde    { color: var(--verde); }
+.sp-card .val.amarelo  { color: var(--amarelo); }
+.sp-card .val.vermelho { color: var(--vermelho); }
+
+/* ===== TABELA ===== */
+.sp-tabela-box {
+    background: #fff; border: 1px solid var(--cinza-borda);
+    border-radius: 6px; overflow: hidden; margin-bottom: 12px;
+}
+.sp-tabela-titulo {
+    background: var(--cinza-bg); padding: 9px 16px; font-size: 13px;
+    font-weight: 600; color: var(--texto);
+    border-bottom: 1px solid var(--cinza-borda);
+    display: flex; justify-content: space-between; align-items: center;
+}
+.sp-scroll { overflow-x: auto; max-height: 540px; overflow-y: auto; }
+
+table.sp-tabela {
+    width: 100%; border-collapse: collapse; font-size: 11.5px; white-space: nowrap;
+}
+table.sp-tabela thead th {
+    position: sticky; top: 0; z-index: 3; background: #37474F; color: #fff;
+    padding: 6px 8px; font-weight: 600; font-size: 10.5px; text-align: center;
+    border-right: 1px solid rgba(255,255,255,.12);
+}
+table.sp-tabela thead tr.grupo th {
+    background: #263238; font-size: 10.5px; letter-spacing: .4px;
+    text-transform: uppercase;
+}
+table.sp-tabela thead tr.grupo th.g-desc  { background: #455A64; }
+table.sp-tabela thead tr.grupo th.g-recup { background: #2E7D32; }
+table.sp-tabela thead tr.grupo th.g-pend  { background: #C62828; }
+table.sp-tabela thead tr.grupo th.g-icg   { background: #1565C0; }
+table.sp-tabela thead tr.grupo th.g-total { background: #37474F; }
+table.sp-tabela thead tr.grupo th.g-gap   { background: #6A1B9A; }
+
+table.sp-tabela tbody td {
+    padding: 5px 8px; border-bottom: 1px solid #EEF0F2; text-align: right;
+}
+table.sp-tabela tbody td.cidade {
+    text-align: left; font-weight: 600; color: var(--texto);
+    position: sticky; left: 0; background: #fff; z-index: 2;
+    border-right: 1px solid var(--cinza-borda);
+}
+table.sp-tabela tbody tr:hover td { background: #FAFBFC; }
+table.sp-tabela tbody tr:hover td.cidade { background: #F0F2F5; }
+
+table.sp-tabela tbody tr.total td {
+    background: #37474F !important; color: #fff; font-weight: 700;
+    border-top: 2px solid #263238; position: sticky; bottom: 0; z-index: 2;
+}
+table.sp-tabela tbody tr.total td.cidade {
+    background: #263238 !important; color: #fff;
+}
+
+.col-inad  { color: var(--inad); }
+.col-opcao { color: var(--opcao); }
+.sep-left  { border-left: 2px solid var(--cinza-borda); }
+
+.icg-cel { font-weight: 700; }
+.icg-verde    { color: var(--verde); }
+.icg-amarelo  { color: var(--amarelo); }
+.icg-vermelho { color: var(--vermelho); }
+.gap-pos { color: var(--verde); font-weight: 600; }
+.gap-neg { color: var(--vermelho); font-weight: 600; }
+.seta { font-size: 12px; margin-left: 2px; }
+
+/* ===== GRAFICO ===== */
+.sp-grafico {
+    background: #fff; border: 1px solid var(--cinza-borda);
+    border-radius: 6px; padding: 14px 16px; margin-bottom: 12px;
+}
+.sp-grafico h3 {
+    margin: 0 0 10px; font-size: 14px; font-weight: 600; color: var(--texto);
+    display: flex; justify-content: space-between; align-items: center;
+}
+.sp-grafico .ctrl { font-size: 11px; font-weight: 400; }
+.sp-grafico .ctrl label { margin-left: 12px; cursor: pointer; }
+
+/* ===== ESTADOS ===== */
+.sp-loading, .sp-vazio {
+    text-align: center; padding: 42px 20px;
+    color: var(--texto-fraco); font-size: 14px;
+}
+.sp-spinner {
+    display: inline-block; width: 26px; height: 26px;
+    border: 3px solid var(--cinza-borda); border-top-color: var(--claro-red);
+    border-radius: 50%; animation: girar .7s linear infinite; margin-bottom: 10px;
+}
+@keyframes girar { to { transform: rotate(360deg); } }
+
+.sp-erro {
+    background: #FFEBEE; border: 1px solid #FFCDD2; color: #B71C1C;
+    padding: 12px 16px; border-radius: 6px; font-size: 13px; margin-bottom: 12px;
+}
+.sp-legenda {
+    font-size: 10.5px; color: var(--texto-fraco); padding: 7px 16px;
+    background: var(--cinza-bg); border-top: 1px solid var(--cinza-borda);
+    display: flex; gap: 16px; flex-wrap: wrap;
+}
+.sp-legenda b { color: var(--texto); }
+
+@media (max-width: 900px) {
+    .sp-header { flex-direction: column; align-items: flex-start; }
+    .sp-cards  { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+
+
+<div class="sp-wrap">
+
+    <!-- ===== CABECALHO ===== -->
+    <div class="sp-header">
+        <div>
+            <h2>Painel Safra</h2>
+            <div class="sub">
+                ICG = Recuperados / Desconectados &nbsp;·&nbsp;
+                Portal Operações RNO
+            </div>
+        </div>
+        <div class="sp-tabs" id="tabsSafra">
+            {% for s in safras %}
+            <button class="sp-tab {% if loop.first %}active{% endif %}"
+                    data-safra="{{ s }}">{{ s }}</button>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- ===== FILTROS ===== -->
+    <div class="sp-filtros">
+        <div class="sp-campo">
+            <label>Mês</label>
+            <select id="fMes">
+                {% for m in meses %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="sp-campo">
+            <label>Status contrato</label>
+            <select id="fStatus"><option value="TODOS">Todos</option></select>
+        </div>
+        <div class="sp-campo">
+            <label>Sub tipo equip.</label>
+            <select id="fEquip"><option value="TODOS">Todos</option></select>
+        </div>
+        <div class="sp-campo">
+            <label>Téc. dedicado</label>
+            <select id="fTec"><option value="TODOS">Todos</option></select>
+        </div>
+        <div class="sp-campo">
+            <label>UF</label>
+            <select id="fUf"><option value="TODOS">Todas</option></select>
+        </div>
+        <div class="sp-campo">
+            <label>Município</label>
+            <select id="fMun"><option value="TODOS">Todos</option></select>
+        </div>
+        <div class="sp-campo">
+            <label>Parceira</label>
+            <select id="fParc"><option value="TODOS">Todas</option></select>
+        </div>
+        <div class="sp-campo">
+            <label>Cluster</label>
+            <select id="fCluster"><option value="TODOS">Todos</option></select>
+        </div>
+        <div class="sp-campo sp-acoes">
+            <button class="sp-btn" id="btnAplicar">Aplicar</button>
+            <button class="sp-btn sec" id="btnLimpar">Limpar</button>
+        </div>
+    </div>
+
+    <div id="areaErro"></div>
+
+    <!-- ===== CARDS ===== -->
+    <div class="sp-cards" id="cards"></div>
+
+    <!-- ===== TABELA ===== -->
+    <div class="sp-tabela-box">
+        <div class="sp-tabela-titulo">
+            <span id="tituloTabela">Detalhamento por município</span>
+            <button class="sp-btn sec" id="btnCsv"
+                    style="padding:4px 12px;font-size:11px;">Exportar CSV</button>
+        </div>
+        <div class="sp-scroll">
+            <table class="sp-tabela">
+                <thead>
+                    <tr class="grupo">
+                        <th rowspan="2" style="background:#263238;">Município</th>
+                        <th class="g-desc"  colspan="4">Desconectados</th>
+                        <th class="g-recup" colspan="4">Recuperados</th>
+                        <th class="g-pend"  colspan="4">Pendentes</th>
+                        <th class="g-icg"   colspan="2">ICG</th>
+                        <th class="g-total" colspan="3">Média de dias</th>
+                        <th class="g-total" colspan="4">Total</th>
+                        <th class="g-gap"   colspan="2">GAP Meta</th>
+                    </tr>
+                    <tr>
+                        <th>Inad</th><th>Opção</th><th>% Inad</th><th>% Opção</th>
+                        <th>Inad</th><th>Opção</th><th>% Inad</th><th>% Opção</th>
+                        <th>Inad</th><th>Opção</th><th>% Inad</th><th>% Opção</th>
+                        <th>Inad</th><th>Opção</th>
+                        <th>Inad</th><th>Opção</th><th>Total</th>
+                        <th>Desconec</th><th>Recup</th><th>Pend</th><th>ICG</th>
+                        <th>p.p.</th><th>Faltam</th>
+                    </tr>
+                </thead>
+                <tbody id="corpoTabela">
+                    <tr><td colspan="24" class="sp-loading">
+                        <div class="sp-spinner"></div><br>Carregando...
+                    </td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="sp-legenda">
+            <span><b>ICG</b> = Recuperados ÷ Desconectados</span>
+            <span><b>% Inad / % Opção</b> = participação entre os tipos</span>
+            <span><b>GAP p.p.</b> = ICG − Meta</span>
+            <span><b>Faltam</b> = contratos para atingir a meta</span>
+            <span><span class="icg-verde">▲</span> ≥ 65%</span>
+            <span><span class="icg-amarelo">▶</span> 60–65%</span>
+            <span><span class="icg-vermelho">▼</span> &lt; 60%</span>
+        </div>
+    </div>
+
+    <!-- ===== GRAFICO ===== -->
+    <div class="sp-grafico">
+        <h3>
+            Evolução do ICG
+            <span class="ctrl">
+                <label><input type="checkbox" id="chkRotulos" checked>
+                    mostrar percentuais</label>
+                <label><input type="checkbox" id="chkInad" checked>
+                    Inadimplência</label>
+                <label><input type="checkbox" id="chkOpcao" checked>
+                    Opção</label>
+            </span>
+        </h3>
+        <div id="grafEvolutivo" style="height:340px;"></div>
+    </div>
+
+</div>
+
+
+<script>
+// =====================================================================
+// ESTADO
+// =====================================================================
+const API = "/dash/safra-painel/api";
+
+let safraAtual  = "{{ safras[0] if safras else '1 M' }}";
+let ultimoDados = null;
+let dadosGraf   = null;
+let controlador = null;
+
+// mapeia id do select -> chave da querystring
+const MAPA_FILTROS = {
+    fStatus:  "status_contrato",
+    fEquip:   "sub_tipo_equip",
+    fTec:     "tec_dedicado",
+    fUf:      "uf",
+    fMun:     "municipio",
+    fParc:    "parceira",
+    fCluster: "cluster",
+};
+
+// =====================================================================
+// UTILITARIOS
+// =====================================================================
+const fmtInt = v => (v === null || v === undefined || isNaN(v))
+    ? "-" : Number(v).toLocaleString("pt-BR");
+
+const fmtPct = v => (v === null || v === undefined || isNaN(v) || v === 0)
+    ? "-" : Number(v).toFixed(2).replace(".", ",") + "%";
+
+const fmtPP = v => {
+    if (v === null || v === undefined || isNaN(v)) return "-";
+    const s = Number(v) >= 0 ? "+" : "";
+    return s + Number(v).toFixed(1).replace(".", ",");
+};
+
+const classeFarol = f => ({
+    VERDE: "icg-verde", AMARELO: "icg-amarelo", VERMELHO: "icg-vermelho"
+}[f] || "icg-vermelho");
+
+const setaFarol = f => ({
+    VERDE: "▲", AMARELO: "▶", VERMELHO: "▼"
+}[f] || "▼");
+
+function farolPorIcg(icg) {
+    if (icg >= 65) return "VERDE";
+    if (icg >= 60) return "AMARELO";
+    return "VERMELHO";
+}
+
+function mostrarErro(msg) {
+    document.getElementById("areaErro").innerHTML =
+        `<div class="sp-erro"><b>Erro:</b> ${msg}</div>`;
+}
+function limparErro() {
+    document.getElementById("areaErro").innerHTML = "";
+}
+
+function montarQuery() {
+    const p = new URLSearchParams();
+    p.set("mes",   document.getElementById("fMes").value);
+    p.set("safra", safraAtual);
+    for (const [id, chave] of Object.entries(MAPA_FILTROS)) {
+        const el = document.getElementById(id);
+        if (el && el.value && el.value !== "TODOS") p.set(chave, el.value);
+    }
+    return p;
+}
+
+// =====================================================================
+// FILTROS
+// =====================================================================
+async function carregarFiltros() {
+    const mes = document.getElementById("fMes").value;
+    try {
+        const r = await fetch(
+            `${API}/filtros?mes=${encodeURIComponent(mes)}` +
+            `&safra=${encodeURIComponent(safraAtual)}`);
+        const d = await r.json();
+
+        if (!d.ok) { console.error("[filtros]", d.erro); return; }
+
+        const preencher = (id, lista, rotulo) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            const anterior = el.value;
+            el.innerHTML = `<option value="TODOS">${rotulo}</option>` +
+                (lista || []).map(v => `<option value="${v}">${v}</option>`).join("");
+            if (lista && lista.includes(anterior)) el.value = anterior;
+        };
+
+        const f = d.filtros || {};
+        preencher("fStatus",  f.status_contrato, "Todos");
+        preencher("fEquip",   f.sub_tipo_equip,  "Todos");
+        preencher("fTec",     f.tec_dedicado,    "Todos");
+        preencher("fUf",      f.uf,              "Todas");
+        preencher("fMun",     f.municipio,       "Todos");
+        preencher("fParc",    f.parceira,        "Todas");
+        preencher("fCluster", f.cluster,         "Todos");
+    } catch (e) {
+        console.error("[filtros]", e);
+        mostrarErro("falha ao carregar filtros: " + e.message);
+    }
+}
+
+// =====================================================================
+// DADOS
+// =====================================================================
+async function carregarDados() {
+    limparErro();
+    if (controlador) controlador.abort();
+    controlador = new AbortController();
+
+    document.getElementById("corpoTabela").innerHTML =
+        `<tr><td colspan="24" class="sp-loading">
+            <div class="sp-spinner"></div><br>Carregando...
+         </td></tr>`;
+
+    try {
+        const r = await fetch(`${API}/dados?${montarQuery()}`,
+                              { signal: controlador.signal });
+        const d = await r.json();
+        if (!d.ok) { mostrarErro(d.erro || "falha ao carregar"); return; }
+
+        ultimoDados = d;
+        renderCards(d.total);
+        renderTabela(d.linhas, d.total);
+        document.getElementById("tituloTabela").textContent =
+            `Detalhamento por município · ${d.safra} · ${d.mes} · ` +
+            `${d.qtd_linhas} municípios`;
+    } catch (e) {
+        if (e.name !== "AbortError") mostrarErro(e.message);
+    }
+}
+
+// =====================================================================
+// CARDS
+// =====================================================================
+function renderCards(t) {
+    const f = t.farol || farolPorIcg(t.icg_total);
+    const cls = f.toLowerCase();
+    const gapCls = t.gap_pp >= 0 ? "verde" : "vermelho";
+
+    document.getElementById("cards").innerHTML = `
+        <div class="sp-card">
+            <div class="rot">Desconectados</div>
+            <div class="val">${fmtInt(t.desc_total)}</div>
+            <div class="det">Inad ${fmtInt(t.desc_inad)} ·
+                             Opção ${fmtInt(t.desc_opcao)}</div>
+        </div>
+        <div class="sp-card verde">
+            <div class="rot">Recuperados</div>
+            <div class="val" style="color:var(--verde)">${fmtInt(t.recup_total)}</div>
+            <div class="det">Inad ${fmtInt(t.recup_inad)} ·
+                             Opção ${fmtInt(t.recup_opcao)}</div>
+        </div>
+        <div class="sp-card vermelho">
+            <div class="rot">Pendentes</div>
+            <div class="val" style="color:var(--vermelho)">${fmtInt(t.pend_total)}</div>
+            <div class="det">Inad ${fmtInt(t.pend_inad)} ·
+                             Opção ${fmtInt(t.pend_opcao)}</div>
+        </div>
+        <div class="sp-card ${cls}">
+            <div class="rot">ICG Total ${setaFarol(f)}</div>
+            <div class="val ${cls}">${fmtPct(t.icg_total)}</div>
+            <div class="det">Inad ${fmtPct(t.icg_inad)} ·
+                             Opção ${fmtPct(t.icg_opcao)}</div>
+        </div>
+        <div class="sp-card ${gapCls}">
+            <div class="rot">GAP da Meta</div>
+            <div class="val ${gapCls}">${fmtPP(t.gap_pp)} p.p.</div>
+            <div class="det">Meta ${fmtPct(t.meta)} ·
+                             Faltam ${fmtInt(t.faltam)}</div>
+        </div>
+        <div class="sp-card">
+            <div class="rot">Média de dias</div>
+            <div class="val">${fmtInt(t.media_total)}</div>
+            <div class="det">Inad ${fmtInt(t.media_inad)} ·
+                             Opção ${fmtInt(t.media_opcao)}</div>
+        </div>
+    `;
+}
+
+// =====================================================================
+// TABELA
+// =====================================================================
+function renderTabela(linhas, total) {
+    const corpo = document.getElementById("corpoTabela");
+
+    if (!linhas || !linhas.length) {
+        corpo.innerHTML = `<tr><td colspan="24" class="sp-vazio">
+            Nenhum registro para os filtros selecionados</td></tr>`;
+        return;
+    }
+
+    let html = linhas.map(l => {
+        const f = l.farol || farolPorIcg(l.icg_total);
+        const gc = l.gap_pp >= 0 ? "gap-pos" : "gap-neg";
+        return `
+        <tr>
+            <td class="cidade">${l.municipio || "-"}</td>
+
+            <td class="col-inad">${fmtInt(l.desc_inad)}</td>
+            <td class="col-opcao">${fmtInt(l.desc_opcao)}</td>
+            <td class="col-inad">${fmtPct(l.pct_desc_inad)}</td>
+            <td class="col-opcao">${fmtPct(l.pct_desc_opcao)}</td>
+
+            <td class="col-inad sep-left">${fmtInt(l.recup_inad)}</td>
+            <td class="col-opcao">${fmtInt(l.recup_opcao)}</td>
+            <td class="col-inad">${fmtPct(l.pct_recup_inad)}</td>
+            <td class="col-opcao">${fmtPct(l.pct_recup_opcao)}</td>
+
+            <td class="col-inad sep-left">${fmtInt(l.pend_inad)}</td>
+            <td class="col-opcao">${fmtInt(l.pend_opcao)}</td>
+            <td class="col-inad">${fmtPct(l.pct_pend_inad)}</td>
+            <td class="col-opcao">${fmtPct(l.pct_pend_opcao)}</td>
+
+            <td class="sep-left icg-cel">${fmtPct(l.icg_inad)}</td>
+            <td class="icg-cel">${fmtPct(l.icg_opcao)}</td>
+
+            <td class="sep-left">${fmtInt(l.media_inad)}</td>
+            <td>${fmtInt(l.media_opcao)}</td>
+            <td>${fmtInt(l.media_total)}</td>
+
+            <td class="sep-left"><b>${fmtInt(l.desc_total)}</b></td>
+            <td>${fmtInt(l.recup_total)}</td>
+            <td>${fmtInt(l.pend_total)}</td>
+            <td class="icg-cel ${classeFarol(f)}">
+                ${fmtPct(l.icg_total)}<span class="seta">${setaFarol(f)}</span></td>
+
+            <td class="sep-left ${gc}">${fmtPP(l.gap_pp)}</td>
+            <td>${fmtInt(l.faltam)}</td>
+        </tr>`;
+    }).join("");
+
+    const ft = total.farol || farolPorIcg(total.icg_total);
+    html += `
+        <tr class="total">
+            <td class="cidade">TOTAL GERAL</td>
+            <td>${fmtInt(total.desc_inad)}</td>
+            <td>${fmtInt(total.desc_opcao)}</td>
+            <td>${fmtPct(total.pct_desc_inad)}</td>
+            <td>${fmtPct(total.pct_desc_opcao)}</td>
+            <td>${fmtInt(total.recup_inad)}</td>
+            <td>${fmtInt(total.recup_opcao)}</td>
+            <td>${fmtPct(total.pct_recup_inad)}</td>
+            <td>${fmtPct(total.pct_recup_opcao)}</td>
+            <td>${fmtInt(total.pend_inad)}</td>
+            <td>${fmtInt(total.pend_opcao)}</td>
+            <td>${fmtPct(total.pct_pend_inad)}</td>
+            <td>${fmtPct(total.pct_pend_opcao)}</td>
+            <td>${fmtPct(total.icg_inad)}</td>
+            <td>${fmtPct(total.icg_opcao)}</td>
+            <td>${fmtInt(total.media_inad)}</td>
+            <td>${fmtInt(total.media_opcao)}</td>
+            <td>${fmtInt(total.media_total)}</td>
+            <td>${fmtInt(total.desc_total)}</td>
+            <td>${fmtInt(total.recup_total)}</td>
+            <td>${fmtInt(total.pend_total)}</td>
+            <td>${fmtPct(total.icg_total)}
+                <span class="seta">${setaFarol(ft)}</span></td>
+            <td>${fmtPP(total.gap_pp)}</td>
+            <td>${fmtInt(total.faltam)}</td>
+        </tr>`;
+
+    corpo.innerHTML = html;
+}
+
+// =====================================================================
+// GRAFICO - com percentuais acima dos pontos
+// =====================================================================
+async function carregarGrafico() {
+    try {
+        const r = await fetch(
+            `${API}/evolutivo?safra=${encodeURIComponent(safraAtual)}`);
+        const d = await r.json();
+        if (!d.ok || !d.meses.length) return;
+        dadosGraf = d;
+        desenharGrafico();
+    } catch (e) {
+        console.error("[grafico]", e);
+    }
+}
+
+function desenharGrafico() {
+    if (!dadosGraf) return;
+
+    const d = dadosGraf;
+    const comRotulo = document.getElementById("chkRotulos").checked;
+    const verInad   = document.getElementById("chkInad").checked;
+    const verOpcao  = document.getElementById("chkOpcao").checked;
+
+    // formata o rotulo exibido acima do ponto
+    const rotular = arr => arr.map(v =>
+        v ? v.toFixed(1).replace(".", ",") + "%" : "");
+
+    const serie = (y, nome, cor, larg, posicao) => ({
+        x: d.meses,
+        y: y,
+        name: nome,
+        type: "scatter",
+        mode: comRotulo ? "lines+markers+text" : "lines+markers",
+        text: comRotulo ? rotular(y) : [],
+        textposition: posicao,
+        textfont: { size: 10, color: cor, family: "Arial" },
+        line: { color: cor, width: larg },
+        marker: { size: larg > 2 ? 9 : 7 },
+        hovertemplate: "%{x}<br><b>%{y:.2f}%</b><extra>" + nome + "</extra>",
+    });
+
+    const dados = [];
+    if (verOpcao) dados.push(serie(d.icg_opcao, "Opção", "#1565C0", 2, "top center"));
+    if (verInad)  dados.push(serie(d.icg_inad, "Inadimplência", "#C62828", 2, "bottom center"));
+    dados.push(serie(d.icg_total, "ICG Total", "#37474F", 3, "top center"));
+
+    // margem extra no topo para os rotulos nao cortarem
+    const todos = [...d.icg_total,
+                   ...(verInad ? d.icg_inad : []),
+                   ...(verOpcao ? d.icg_opcao : [])];
+    const maxY = Math.max(...todos, 70);
+
+    Plotly.newPlot("grafEvolutivo", dados, {
+        margin: { l: 55, r: 55, t: 24, b: 44 },
+        yaxis: {
+            title: "ICG (%)",
+            ticksuffix: "%",
+            range: [0, maxY * 1.18],
+            gridcolor: "#F0F2F5",
+        },
+        xaxis: { gridcolor: "#F8F9FA" },
+        hovermode: "x unified",
+        legend: { orientation: "h", y: -0.16 },
+        plot_bgcolor: "#fff",
+        paper_bgcolor: "#fff",
+        shapes: [
+            {
+                type: "line", xref: "paper", x0: 0, x1: 1, y0: 65, y1: 65,
+                line: { color: "#2E7D32", width: 1.5, dash: "dash" },
+            },
+            {
+                type: "line", xref: "paper", x0: 0, x1: 1, y0: 60, y1: 60,
+                line: { color: "#F9A825", width: 1.5, dash: "dash" },
+            },
+        ],
+        annotations: [
+            {
+                xref: "paper", x: 1.01, y: 65, xanchor: "left",
+                text: "<b>65%</b>", showarrow: false,
+                font: { size: 10, color: "#2E7D32" },
+            },
+            {
+                xref: "paper", x: 1.01, y: 60, xanchor: "left",
+                text: "<b>60%</b>", showarrow: false,
+                font: { size: 10, color: "#F9A825" },
+            },
+        ],
+    }, { responsive: true, displayModeBar: false });
+}
+
+// =====================================================================
+// EXPORTAR CSV
+// =====================================================================
+function exportarCsv() {
+    if (!ultimoDados || !ultimoDados.linhas.length) return;
+
+    const cab = [
+        "Municipio",
+        "Desc_Inad","Desc_Opcao","Pct_Desc_Inad","Pct_Desc_Opcao",
+        "Recup_Inad","Recup_Opcao","Pct_Recup_Inad","Pct_Recup_Opcao",
+        "Pend_Inad","Pend_Opcao","Pct_Pend_Inad","Pct_Pend_Opcao",
+        "ICG_Inad","ICG_Opcao",
+        "Media_Inad","Media_Opcao","Media_Total",
+        "Desc_Total","Recup_Total","Pend_Total","ICG_Total",
+        "Meta","GAP_pp","Faltam","Farol",
+    ];
+
+    const mapear = l => [
+        l.municipio,
+        l.desc_inad, l.desc_opcao, l.pct_desc_inad, l.pct_desc_opcao,
+        l.recup_inad, l.recup_opcao, l.pct_recup_inad, l.pct_recup_opcao,
+        l.pend_inad, l.pend_opcao, l.pct_pend_inad, l.pct_pend_opcao,
+        l.icg_inad, l.icg_opcao,
+        l.media_inad, l.media_opcao, l.media_total,
+        l.desc_total, l.recup_total, l.pend_total, l.icg_total,
+        l.meta, l.gap_pp, l.faltam, l.farol,
+    ];
+
+    const linhas = ultimoDados.linhas.map(mapear);
+    const t = ultimoDados.total;
+    linhas.push(mapear({ ...t, municipio: "TOTAL GERAL" }));
+
+    const csv = [cab, ...linhas]
+        .map(l => l.map(c => `"${c ?? ""}"`).join(";")).join("\n");
+
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `safra_${ultimoDados.safra.replace(" ", "")}_${ultimoDados.mes}.csv`;
+    a.click();
+}
+
+// =====================================================================
+// EVENTOS
+// =====================================================================
+document.getElementById("tabsSafra").addEventListener("click", e => {
+    const btn = e.target.closest(".sp-tab");
+    if (!btn) return;
+    document.querySelectorAll(".sp-tab").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    safraAtual = btn.dataset.safra;
+    carregarFiltros().then(() => { carregarDados(); carregarGrafico(); });
+});
+
+document.getElementById("fMes").addEventListener("change", () => {
+    carregarFiltros().then(carregarDados);
+});
+
+document.getElementById("btnAplicar").addEventListener("click", carregarDados);
+
+document.getElementById("btnLimpar").addEventListener("click", () => {
+    Object.keys(MAPA_FILTROS).forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = "TODOS";
+    });
+    carregarDados();
+});
+
+document.getElementById("btnCsv").addEventListener("click", exportarCsv);
+
+["chkRotulos", "chkInad", "chkOpcao"].forEach(id =>
+    document.getElementById(id).addEventListener("change", desenharGrafico));
+
+// =====================================================================
+// INICIALIZACAO
+// =====================================================================
+(async function iniciar() {
+    await carregarFiltros();
+    await carregarDados();
+    await carregarGrafico();
+})();
+</script>
+
+{% endblock %}

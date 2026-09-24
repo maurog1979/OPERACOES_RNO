@@ -1,0 +1,1346 @@
+{% extends "base.html" %}
+{% block content %}
+
+<!--
+=====================================================================
+PORTAL OPERACOES RNO
+areas/adm/desconexao/templates/dash_backlog_rno.html
+Backlog - os contratos da Safra na agenda
+=====================================================================
+ARQUIVO COMPLETO - substitua o anterior inteiro.
+
+FILTROS NO PADRAO dash_backlog
+  - todos multi-select com Choices.js e tags vermelhas
+  - separador '||' entre valores
+  - cascata: as opcoes derivam dos demais filtros
+  - atualizacao automatica com debounce de 250ms
+  - sem botao Aplicar, apenas Limpar filtros
+  - flag _updating evita loop de eventos
+
+  Sem filtro selecionado, traz todos os 8 meses somados.
+
+GRAFICOS COM ALTURA FIXA
+  Sem height explicito o container colapsa e o Plotly desenha
+  tudo achatado.
+
+ONDE SALVAR
+  areas\adm\desconexao\templates\dash_backlog_rno.html
+=====================================================================
+-->
+
+<div id="loading-overlay">
+  <div class="spinner"></div>
+  <p>Carregando dados...</p>
+</div>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js@10.2.0/public/assets/styles/choices.min.css">
+
+<style>
+  .bkl-wrap { padding: 1rem 1.5rem 2rem; background:#F5F6FA; min-height:100vh; }
+
+  .bkl-title-bar {
+    display:flex; justify-content:space-between; align-items:center;
+    background:linear-gradient(90deg,#E60000,#B71C1C); color:#fff;
+    padding:.8rem 1.2rem; border-radius:.6rem; margin-bottom:1rem;
+    font-weight:600;
+  }
+  .bkl-title-bar a { color:#fff; background:rgba(255,255,255,.15);
+    padding:.4rem .8rem; border-radius:.4rem; text-decoration:none; font-size:.9rem; }
+  .bkl-title-bar a:hover { background:rgba(255,255,255,.3); }
+  .bkl-title-bar .foto { font-size:.78rem; font-weight:400; opacity:.9;
+                         margin-top:.15rem; }
+
+  .filter-bar { background:#fff; padding:1rem; border-radius:.6rem;
+                box-shadow:0 1px 3px rgba(0,0,0,.06); margin-bottom:1rem; }
+  .filter-bar label { font-size:.75rem; font-weight:600; color:#555;
+                      text-transform:uppercase; margin-bottom:.3rem; display:block; }
+
+  .universo-bar {
+    background:#263238; color:#fff; padding:.6rem 1.1rem;
+    border-radius:.5rem; margin-bottom:1rem; font-size:.85rem;
+    display:flex; justify-content:space-between; align-items:center;
+    flex-wrap:wrap; gap:.6rem;
+  }
+  .universo-bar b { font-size:1.05rem; }
+  .universo-bar .ctx { opacity:.85; font-size:.8rem; }
+
+  /* ===== Choices.js - estilo Claro ===== */
+  .choices { margin-bottom: 0 !important; font-size: .85rem; }
+  .choices__inner {
+    min-height: 38px !important;
+    padding: 4px 7.5px 0 7.5px !important;
+    background:#fff !important;
+    border:1px solid #ced4da !important;
+    border-radius:.375rem !important;
+    font-size:.85rem !important;
+  }
+  .choices[data-type*="select-multiple"] .choices__button {
+    border-left:1px solid rgba(255,255,255,.5) !important;
+    margin: 0 -4px 0 8px !important;
+  }
+  .choices__list--multiple .choices__item {
+    background-color:#E60000 !important;
+    border:1px solid #B71C1C !important;
+    color:#fff !important;
+    font-weight:500 !important;
+    border-radius:.3rem !important;
+    padding:3px 10px !important;
+    margin:2px 4px 2px 0 !important;
+  }
+  .choices__list--dropdown .choices__item--selectable.is-highlighted {
+    background-color:#FCE4EC !important;
+    color:#B71C1C !important;
+  }
+  .is-focused .choices__inner, .is-open .choices__inner {
+    border-color:#E60000 !important;
+    box-shadow:0 0 0 .15rem rgba(230,0,0,.15) !important;
+  }
+  .choices__placeholder { opacity:.6 !important; color:#999 !important; }
+
+  .kpi-card { border:none; border-left:4px solid #1565C0; transition:transform .15s; }
+  .kpi-card:hover { transform:translateY(-2px); }
+  .kpi-card .sub { font-size:.68rem; color:#888; }
+
+  .section-header { background:linear-gradient(90deg,#E60000,#B71C1C); color:#fff;
+                    padding:.5rem 1rem; border-radius:.4rem; font-weight:600;
+                    font-size:.85rem; letter-spacing:.05em; margin:1rem 0 .5rem;
+                    display:flex; justify-content:space-between; align-items:center; }
+  .section-header .acoes { font-weight:400; font-size:.75rem; }
+  .section-header .acoes button {
+    background:rgba(255,255,255,.18); border:1px solid rgba(255,255,255,.35);
+    color:#fff; padding:2px 10px; border-radius:.3rem; font-size:.72rem;
+    margin-left:4px; cursor:pointer;
+  }
+  .section-header .acoes button.active { background:#fff; color:#B71C1C; }
+
+  .graph-card { background:#fff; border-radius:.6rem; padding:.5rem;
+                box-shadow:0 1px 3px rgba(0,0,0,.06); }
+
+  /* altura dos graficos - sem isso o container colapsa */
+  #g1, #g2, #g3, #g4 { min-height:340px; }
+  #g5, #g6 { min-height:400px; }
+  #g-evo   { min-height:380px; }
+
+  .tabela-card { background:#fff; border-radius:.6rem;
+                 box-shadow:0 1px 3px rgba(0,0,0,.06); overflow:hidden; }
+  .tabela-scroll { max-height:440px; overflow:auto; }
+  .tabela-card table { font-size:.8rem; margin-bottom:0; }
+  .tabela-card thead th {
+    position:sticky; top:0; background:#37474F; color:#fff;
+    font-size:.72rem; font-weight:600; padding:.45rem .7rem;
+    text-align:right; white-space:nowrap; z-index:2;
+  }
+  .tabela-card thead th:first-child { text-align:left; }
+  .tabela-card tbody td { padding:.35rem .7rem; text-align:right; white-space:nowrap; }
+  .tabela-card tbody td:first-child { text-align:left; font-weight:600; }
+  .tabela-card tbody tr.total td { background:#37474F; color:#fff; font-weight:700; }
+
+  .badge-hoje    { background:#F57C00 !important; }
+  .badge-vencida { background:#C62828 !important; }
+  .badge-futura  { background:#2E7D32 !important; }
+  .badge-sem     { background:#78909C !important; }
+
+  #btn-limpar { font-size:.8rem; }
+
+  .consulta-box { background:#fff; border-radius:.6rem; padding:1rem;
+                  box-shadow:0 1px 3px rgba(0,0,0,.06); margin-bottom:1rem; }
+  .ident-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
+                gap:.8rem; }
+  .ident-grid .rot { font-size:.68rem; color:#888; text-transform:uppercase;
+                     font-weight:600; letter-spacing:.03em; }
+  .ident-grid .val { font-size:.85rem; font-weight:600; color:#333; }
+  .resumo-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(105px,1fr));
+                 gap:.6rem; }
+  .resumo-grid .item { background:#F5F6FA; border-radius:.4rem; padding:.6rem;
+                       text-align:center; }
+  .resumo-grid .n { font-size:1.3rem; font-weight:700; color:#E60000; }
+  .resumo-grid .l { font-size:.65rem; color:#888; text-transform:uppercase;
+                    font-weight:600; }
+
+  .timeline { position:relative; padding-left:1.6rem; }
+  .timeline::before { content:""; position:absolute; left:.5rem; top:.3rem;
+                      bottom:.3rem; width:2px; background:#E0E3E7; }
+  .timeline .ev { position:relative; padding:.5rem 0; }
+  .timeline .ev::before { content:""; position:absolute; left:-1.35rem; top:.85rem;
+                          width:10px; height:10px; border-radius:50%;
+                          background:#fff; border:2px solid #E65100; }
+  .timeline .ev.ok::before  { border-color:#2E7D32; }
+  .timeline .ev.nok::before { border-color:#C62828; }
+  .timeline .ev .dt { font-size:.75rem; font-weight:700; }
+  .timeline .ev .inf { font-size:.78rem; color:#666; }
+
+  #loading-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(255,255,255,0.85); z-index: 9999;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+  }
+  #loading-overlay .spinner {
+    width: 60px; height: 60px;
+    border: 6px solid #E60000; border-top-color: transparent;
+    border-radius: 50%; animation: spin 0.8s linear infinite;
+  }
+  #loading-overlay p { margin-top: 1rem; color: #B71C1C;
+                       font-weight: 600; font-size: 1.1rem; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .nav-abas { background:#fff; border-radius:.6rem .6rem 0 0;
+              box-shadow:0 1px 3px rgba(0,0,0,.06); margin-bottom:1rem;
+              display:flex; overflow-x:auto; }
+  .nav-abas button {
+    background:none; border:none; border-bottom:3px solid transparent;
+    padding:.7rem 1.3rem; font-size:.83rem; font-weight:600; color:#888;
+    white-space:nowrap; cursor:pointer;
+  }
+  .nav-abas button:hover { color:#333; background:#FAFBFC; }
+  .nav-abas button.active { color:#E60000; border-bottom-color:#E60000;
+                            background:#FFF5F5; }
+
+  .painel { display:none; }
+  .painel.active { display:block; }
+</style>
+
+
+<div class="bkl-wrap">
+
+  <!-- ===== TITULO ===== -->
+  <div class="bkl-title-bar">
+    <div>
+      <i class="bi bi-calendar-check-fill"></i>
+      DESCONEXAO RNO --- BACKLOG
+      <div class="foto">
+        Como os contratos da Safra estão na agenda
+        &nbsp;·&nbsp; Foto: <b>{{ ultima_foto or "-" }}</b>
+        &nbsp;·&nbsp; {{ qtd_fotos }} no histórico
+      </div>
+    </div>
+    <a href="/area/adm/desconexao/"><i class="bi bi-arrow-left"></i> Voltar ao Hub</a>
+  </div>
+
+  <!-- ===== ABAS ===== -->
+  <div class="nav-abas" id="abas">
+    <button class="active" data-p="visao">
+      <i class="bi bi-bar-chart-fill"></i> Visão Geral</button>
+    <button data-p="detalhe">
+      <i class="bi bi-table"></i> Agenda detalhada</button>
+    <button data-p="matriz">
+      <i class="bi bi-grid-3x3"></i> Cidade × Agenda</button>
+    <button data-p="evolutivo">
+      <i class="bi bi-graph-up"></i> Evolutivo</button>
+    <button data-p="consulta">
+      <i class="bi bi-search"></i> Consulta contrato</button>
+  </div>
+
+  <!-- ===== FILTROS - todos multi-select, sem botao Aplicar ===== -->
+  <div class="filter-bar" id="area-filtros">
+    <div class="row g-2 mb-2">
+      <div class="col-md-2 col-6"><label>MÊS</label>
+        <select id="f-mes" multiple data-ph="Todos"></select></div>
+      <div class="col-md-2 col-6"><label>SAFRA</label>
+        <select id="f-safra" multiple data-ph="Todas"></select></div>
+      <div class="col-md-2 col-6"><label>SITUAÇÃO</label>
+        <select id="f-situacao" multiple data-ph="Todas"></select></div>
+      <div class="col-md-2 col-6"><label>UF</label>
+        <select id="f-uf" multiple data-ph="Todas"></select></div>
+      <div class="col-md-2 col-6"><label>CIDADE</label>
+        <select id="f-cidade" multiple data-ph="Todas"></select></div>
+      <div class="col-md-2 col-6"><label>PARCEIRA</label>
+        <select id="f-parceira" multiple data-ph="Todas"></select></div>
+    </div>
+    <div class="row g-2">
+      <div class="col-md-4 col-12"><label>TIPO DESCONEXAO</label>
+        <select id="f-tipo" multiple data-ph="Todos"></select></div>
+      <div class="col-md-4 col-12"><label>CLUSTER</label>
+        <select id="f-cluster" multiple data-ph="Todos"></select></div>
+    </div>
+    <div class="text-end mt-2">
+      <button id="btn-limpar" class="btn btn-outline-danger btn-sm">
+        <i class="bi bi-eraser"></i> Limpar filtros
+      </button>
+      <span id="status" class="ms-2 small text-muted"></span>
+    </div>
+  </div>
+
+  <!-- ===== UNIVERSO ===== -->
+  <div class="universo-bar" id="universo"></div>
+
+  <!-- ===== KPIs ===== -->
+  <div id="kpis" class="row g-2 mb-3"></div>
+
+
+  <!-- ============ VISAO GERAL ============ -->
+  <div class="painel active" id="p-visao">
+
+    <div class="section-header">
+      <span>SITUAÇÃO DA AGENDA</span>
+      <span class="acoes">
+        exibir
+        <button class="m-btn active" data-m="os">OS</button>
+        <button class="m-btn" data-m="contratos">Contratos</button>
+        <button class="m-btn" data-m="linhas">Linhas</button>
+      </span>
+    </div>
+    <div class="row g-2">
+      <div class="col-lg-6 col-12"><div class="graph-card"><div id="g1"></div></div></div>
+      <div class="col-lg-6 col-12"><div class="graph-card"><div id="g2"></div></div></div>
+    </div>
+
+    <div class="section-header">AGENDA PROGRAMADA E ATRASO</div>
+    <div class="row g-2">
+      <div class="col-lg-6 col-12"><div class="graph-card"><div id="g3"></div></div></div>
+      <div class="col-lg-6 col-12"><div class="graph-card"><div id="g4"></div></div></div>
+    </div>
+
+    <div class="section-header">CIDADES E PARCEIRAS</div>
+    <div class="row g-2">
+      <div class="col-lg-6 col-12"><div class="graph-card"><div id="g5"></div></div></div>
+      <div class="col-lg-6 col-12"><div class="graph-card"><div id="g6"></div></div></div>
+    </div>
+
+  </div>
+
+
+  <!-- ============ AGENDA DETALHADA ============ -->
+  <div class="painel" id="p-detalhe">
+    <div class="section-header">
+      <span id="tit-detalhe">AGENDA DIA A DIA</span>
+      <span class="acoes">
+        <button id="btn-csv-agenda"><i class="bi bi-download"></i> CSV</button>
+      </span>
+    </div>
+    <div class="tabela-card">
+      <div class="tabela-scroll">
+        <table class="table table-sm table-hover">
+          <thead><tr>
+            <th>Agenda</th><th>Situação</th>
+            <th>OS</th><th>Contratos</th><th>Linhas</th><th>% OS</th>
+          </tr></thead>
+          <tbody id="tb-agenda"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="section-header">MOTIVOS DE REAGENDAMENTO</div>
+    <div class="row g-2">
+      <div class="col-lg-7 col-12"><div class="graph-card"><div id="g-mot"
+           style="min-height:420px;"></div></div></div>
+      <div class="col-lg-5 col-12">
+        <div class="tabela-card">
+          <div class="tabela-scroll" style="max-height:420px;">
+            <table class="table table-sm table-hover">
+              <thead><tr><th>Motivo</th><th>OS</th><th>Contratos</th></tr></thead>
+              <tbody id="tb-motivos"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ============ MATRIZ ============ -->
+  <div class="painel" id="p-matriz">
+    <div class="section-header">
+      <span id="tit-matriz">CIDADE × SITUAÇÃO DA AGENDA</span>
+      <span class="acoes">
+        <button class="d-btn active" data-d="cidade">Cidade</button>
+        <button class="d-btn" data-d="parceira">Parceira</button>
+        <button class="d-btn" data-d="cluster">Cluster</button>
+        <button id="btn-csv-matriz"><i class="bi bi-download"></i> CSV</button>
+      </span>
+    </div>
+    <div class="tabela-card">
+      <div class="tabela-scroll">
+        <table class="table table-sm table-hover" id="tb-matriz"></table>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ============ EVOLUTIVO ============ -->
+  <div class="painel" id="p-evolutivo">
+    <div id="aviso-evo"></div>
+    <div class="section-header">EVOLUÇÃO DIÁRIA</div>
+    <div class="graph-card mb-2"><div id="g-evo"></div></div>
+    <div class="tabela-card">
+      <div class="tabela-scroll">
+        <table class="table table-sm table-hover">
+          <thead><tr>
+            <th>Data</th><th>OS</th><th>Contratos</th>
+            <th>Com agenda</th><th>Sem agenda</th><th>Variação</th>
+          </tr></thead>
+          <tbody id="tb-evo"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ============ CONSULTA ============ -->
+  <div class="painel" id="p-consulta">
+    <div class="consulta-box">
+      <label class="form-label small fw-bold text-uppercase text-muted">
+        Consulta completa por contrato</label>
+      <div class="input-group" style="max-width:460px;">
+        <input type="text" id="inp-contrato" class="form-control"
+               placeholder="Número do contrato (CD_NET)">
+        <button class="btn btn-danger" id="btn-buscar">
+          <i class="bi bi-search"></i> Buscar</button>
+      </div>
+      <div class="form-text">
+        Retorna Safra com equipamentos, Backlog, movimentação diária
+        e histórico de Quebra de Agenda
+      </div>
+    </div>
+    <div id="res-consulta"></div>
+  </div>
+
+</div>
+
+
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/choices.js@10.2.0/public/assets/scripts/choices.min.js"></script>
+<script>
+(function(){
+
+  // ===================================================================
+  // CONFIGURACAO
+  // Mesmo padrao do dash_backlog: FIELDS e MAP
+  // ===================================================================
+  const API = "/dash/backlog-rno/api";
+
+  const FIELDS = ["MES_REFERENCIA","SAFRA","SITUACAO","DS_TIPO_DESCONEXAO",
+                  "UF","NM_MUNICIPIO","NM_CLUSTER","TOA_PARCEIRA"];
+
+  const MAP = {
+    MES_REFERENCIA:     "f-mes",
+    SAFRA:              "f-safra",
+    SITUACAO:           "f-situacao",
+    DS_TIPO_DESCONEXAO: "f-tipo",
+    UF:                 "f-uf",
+    NM_MUNICIPIO:       "f-cidade",
+    NM_CLUSTER:         "f-cluster",
+    TOA_PARCEIRA:       "f-parceira",
+  };
+
+  const CORES = {
+    vermelho:"#E60000", vinho:"#B71C1C", verde:"#2E7D32",
+    azul:"#1565C0", laranja:"#F57C00", amarelo:"#F9A825",
+    cinza:"#78909C", roxo:"#6A1B9A",
+  };
+
+  const choicesInstances = {};
+  let _updating = false;
+  let ctrl = null;
+  let debounceTimer = null;
+  let dados = null, matriz = null, evo = null;
+  let metrica = "os";
+  let dimensao = "cidade";
+  let painel = "visao";
+
+  const status  = document.getElementById("status");
+  const fmt     = n => (n||0).toLocaleString("pt-BR");
+  const fmtPct  = n => (n||0).toFixed(1).replace(".",",") + "%";
+  const overlay = document.getElementById("loading-overlay");
+
+  function debounce(fn, ms){
+    return function(){
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(fn, ms);
+    };
+  }
+  const refreshDebounced = debounce(refresh, 250);
+
+  // ===================================================================
+  // INICIALIZA CHOICES
+  // ===================================================================
+  FIELDS.forEach(f => {
+    const el = document.getElementById(MAP[f]);
+    const ph = el.getAttribute("data-ph") || "Selecione...";
+    const c = new Choices(el, {
+      removeItemButton: true,
+      shouldSort: false,
+      placeholder: true,
+      placeholderValue: ph,
+      searchPlaceholderValue: "Buscar...",
+      searchEnabled: true,
+      itemSelectText: "",
+      noResultsText: "Sem resultados",
+      noChoicesText: "Sem opcoes",
+      duplicateItemsAllowed: false,
+    });
+    choicesInstances[f] = c;
+
+    // usa eventos do Choices, nao 'change' do select
+    el.addEventListener("addItem",    () => { if (!_updating) refreshDebounced(); });
+    el.addEventListener("removeItem", () => { if (!_updating) refreshDebounced(); });
+  });
+
+  function getSelected(field){
+    const c = choicesInstances[field];
+    if (!c) return [];
+    const v = c.getValue(true);
+    return Array.isArray(v) ? v.map(String) : (v ? [String(v)] : []);
+  }
+
+  function setOpts(field, vals){
+    const c = choicesInstances[field];
+    if (!c) return;
+    _updating = true;
+    try {
+      // replaceChoices=true troca apenas o dropdown,
+      // preserva as tags ja selecionadas
+      c.setChoices((vals||[]).map(v => ({
+        value: String(v), label: String(v),
+        selected: false, disabled: false,
+      })), "value", "label", true);
+    } finally {
+      _updating = false;
+    }
+  }
+
+  function qs(){
+    const p = new URLSearchParams();
+    FIELDS.forEach(f => {
+      const vals = getSelected(f);
+      if (vals.length) p.set(f, vals.join("||"));
+    });
+    return p;
+  }
+
+  // ===================================================================
+  // DATAS
+  // ===================================================================
+  function paraData(txt){
+    const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(txt);
+    return m ? new Date(+m[3], +m[2]-1, +m[1]) : null;
+  }
+  function diasAte(txt){
+    const d = paraData(txt);
+    if (!d) return null;
+    const h = new Date(); h.setHours(0,0,0,0);
+    return Math.round((d - h) / 86400000);
+  }
+  function situacaoData(txt){
+    const dif = diasAte(txt);
+    if (dif === null) return "";
+    return dif < 0 ? "vencida" : dif === 0 ? "hoje" : "futura";
+  }
+
+  // ===================================================================
+  // PLOTLY
+  // ===================================================================
+  const lay = (extra={}) => Object.assign({
+    height: 340,
+    autosize: true,
+    margin:{l:60,r:25,t:45,b:55},
+    plot_bgcolor:"#fff", paper_bgcolor:"#fff",
+    font:{family:"Segoe UI, Arial", size:11},
+    title:{font:{size:13, color:"#333"}, x:0.01, xanchor:"left", y:0.97},
+    showlegend:false,
+  }, extra);
+
+  const CFG = {responsive:true, displaylogo:false, displayModeBar:false};
+
+  function vazio(id, msg){
+    const el = document.getElementById(id);
+    Plotly.purge(el);
+    el.innerHTML = '<div class="text-muted text-center p-5">' +
+                   (msg || "Sem dados") + '</div>';
+  }
+
+  // ===================================================================
+  // REFRESH
+  // ===================================================================
+  async function refresh(){
+    if (ctrl) ctrl.abort();
+    ctrl = new AbortController();
+    status.textContent = "Atualizando...";
+
+    try {
+      const r = await fetch(`${API}/refresh?${qs()}`, {signal: ctrl.signal});
+      const j = await r.json();
+
+      if (j.erro){ status.textContent = "Erro: " + j.erro; return; }
+
+      // cascata dos filtros
+      Object.keys(j.options || {}).forEach(k => {
+        if (MAP[k]) setOpts(k, j.options[k]);
+      });
+
+      dados = j;
+      renderUniverso(j.kpis);
+      renderKpis(j.kpis);
+      renderGraficos(j);
+      renderTabelaAgenda(j);
+      renderMotivos(j.motivos);
+
+      status.textContent = j.empty
+        ? "Sem resultados"
+        : "Total: " + fmt(j.total) + " linhas da Safra";
+
+      if (overlay) overlay.style.display = "none";
+
+      // recarrega matriz e evolutivo se estiverem abertos
+      matriz = null; evo = null;
+      if (painel === "matriz")    carregarMatriz();
+      if (painel === "evolutivo") carregarEvolutivo();
+
+    } catch(e){
+      if (e.name !== "AbortError"){
+        status.textContent = "Erro: " + e.message;
+        console.error(e);
+      }
+    }
+  }
+
+  // ===================================================================
+  // UNIVERSO
+  // ===================================================================
+  function renderUniverso(k){
+    const sel = FIELDS
+      .map(f => ({campo:f, vals:getSelected(f)}))
+      .filter(x => x.vals.length);
+
+    const ctx = sel.length
+      ? sel.map(x => {
+          const rot = {
+            MES_REFERENCIA:"Mês", SAFRA:"Safra", SITUACAO:"Situação",
+            DS_TIPO_DESCONEXAO:"Tipo", UF:"UF", NM_MUNICIPIO:"Cidade",
+            NM_CLUSTER:"Cluster", TOA_PARCEIRA:"Parceira",
+          }[x.campo] || x.campo;
+          return rot + ": " + (x.vals.length > 2
+            ? x.vals.length + " selecionados"
+            : x.vals.join(", "));
+        }).join(" · ")
+      : `Sem filtro · ${fmt(k.meses)} meses · ${fmt(k.municipios)} municípios`;
+
+    document.getElementById("universo").innerHTML = `
+      <span>
+        <i class="bi bi-database-fill"></i>
+        Universo analisado:
+        <b>${fmt(k.linhas)}</b> linhas da Safra
+        &nbsp;·&nbsp; <b>${fmt(k.contratos)}</b> contratos
+      </span>
+      <span class="ctx">${ctx}</span>`;
+  }
+
+  // ===================================================================
+  // KPIs
+  // ===================================================================
+  function renderKpis(k){
+    const lista = [
+      {v:k.linhas,      l:"LINHAS DA SAFRA", s:fmt(k.contratos)+" contratos",
+       i:"bi-database-fill",       c:"#37474F"},
+      {v:k.no_backlog,  l:"NO BACKLOG",      s:fmtPct(k.pct_backlog)+" das linhas",
+       i:"bi-layers-fill",         c:CORES.azul},
+      {v:k.os_backlog,  l:"OS NO BACKLOG",   s:"ordens de serviço",
+       i:"bi-clipboard-check-fill",c:CORES.roxo},
+      {v:k.os_com_data, l:"COM AGENDA",      s:fmtPct(k.pct_com_data)+" das OS",
+       i:"bi-calendar-check-fill", c:CORES.verde},
+      {v:k.os_sem_data, l:"SEM AGENDA",      s:"aguardando agendamento",
+       i:"bi-calendar-x-fill",     c:CORES.vermelho},
+      {v:k.vencida,     l:"AGENDA VENCIDA",
+       s:"hoje "+fmt(k.hoje)+" · futuro "+fmt(k.futura),
+       i:"bi-exclamation-triangle-fill", c:CORES.laranja},
+    ];
+
+    document.getElementById("kpis").innerHTML = lista.map(d => `
+      <div class="col-md-2 col-6">
+        <div class="card shadow-sm text-center kpi-card"
+             style="border-left-color:${d.c}">
+          <div class="card-body py-2">
+            <div class="mb-1">
+              <i class="bi ${d.i}" style="font-size:1.4rem;color:${d.c}"></i>
+            </div>
+            <p class="text-muted small mb-1" style="font-size:.66rem;">${d.l}</p>
+            <h5 class="fw-bold mb-0" style="color:${d.c}">${fmt(d.v)}</h5>
+            <div class="sub">${d.s}</div>
+          </div>
+        </div>
+      </div>`).join("");
+  }
+
+  // ===================================================================
+  // GRAFICOS
+  // ===================================================================
+  function renderGraficos(j){
+    const ag = j.agenda || [];
+    if (!ag.length){
+      ["g1","g2","g3","g4","g5","g6"].forEach(id => vazio(id));
+      return;
+    }
+
+    // ---------- G1: situacao macro ----------
+    const macro = {
+      "Nunca agendada":0, "Reagendada sem data":0,
+      "Com data de agenda":0, "Fora do backlog":0,
+    };
+
+    ag.forEach(a => {
+      const v = a[metrica];
+      if (!a.no_backlog) macro["Fora do backlog"] += v;
+      else if (a.tem_data) macro["Com data de agenda"] += v;
+      else if (a.grupo.indexOf("NUNCA") >= 0) macro["Nunca agendada"] += v;
+      else macro["Reagendada sem data"] += v;
+    });
+
+    const mk = Object.keys(macro);
+    const mv = mk.map(k => macro[k]);
+    const totMacro = mv.reduce((a,b)=>a+b, 0);
+
+    Plotly.react("g1", [{
+      type:"bar", orientation:"h",
+      y: mk.slice().reverse(),
+      x: mv.slice().reverse(),
+      text: mv.slice().reverse().map(v =>
+              fmt(v) + "  (" + fmtPct(totMacro ? v/totMacro*100 : 0) + ")"),
+      textposition:"auto",
+      marker:{color:[CORES.cinza, CORES.verde, CORES.amarelo, CORES.vermelho]},
+      hovertemplate:"%{y}<br><b>%{x:,}</b><extra></extra>",
+    }], lay({
+      title:{text:"Situação da agenda"},
+      margin:{l:160,r:70,t:45,b:45},
+      xaxis:{tickfont:{size:10}},
+      yaxis:{tickfont:{size:11}},
+    }), CFG);
+
+    // ---------- G2: rosca ----------
+    const comData = macro["Com data de agenda"];
+    const semData = macro["Nunca agendada"] + macro["Reagendada sem data"];
+    const fora    = macro["Fora do backlog"];
+
+    Plotly.react("g2", [{
+      type:"pie", hole:.55,
+      labels:["Com data","Sem data","Fora do backlog"],
+      values:[comData, semData, fora],
+      marker:{colors:[CORES.verde, CORES.vermelho, CORES.cinza]},
+      texttemplate:"%{percent}",
+      textposition:"inside",
+      hovertemplate:"%{label}<br><b>%{value:,}</b><extra></extra>",
+    }], lay({
+      title:{text:"Distribuição"},
+      margin:{l:20,r:20,t:45,b:45},
+      showlegend:true,
+      legend:{orientation:"h", y:-0.08, font:{size:10}},
+      annotations:[{
+        text:"<b>"+fmt(totMacro)+"</b><br>"+
+             (metrica==="os"?"OS":metrica==="contratos"?"contratos":"linhas"),
+        showarrow:false, font:{size:13},
+      }],
+    }), CFG);
+
+    // ---------- G3: proximos 15 dias ----------
+    const prox = ag.filter(a => a.tem_data)
+      .map(a => ({...a, dias: diasAte(a.grupo)}))
+      .filter(a => a.dias !== null && a.dias >= 0 && a.dias <= 15)
+      .sort((a,b) => a.dias - b.dias);
+
+    if (prox.length){
+      Plotly.react("g3", [{
+        type:"bar",
+        x: prox.map(a => a.grupo),
+        y: prox.map(a => a[metrica]),
+        text: prox.map(a => fmt(a[metrica])),
+        textposition:"outside",
+        marker:{color: prox.map(a => a.dias === 0 ? CORES.laranja : CORES.verde)},
+        hovertemplate:"%{x}<br><b>%{y:,}</b><extra></extra>",
+      }], lay({
+        title:{text:"Agenda dos próximos 15 dias"},
+        xaxis:{tickangle:-40, tickfont:{size:10}},
+        margin:{l:55,r:25,t:45,b:90},
+      }), CFG);
+    } else {
+      vazio("g3", "Nenhuma agenda nos próximos 15 dias");
+    }
+
+    // ---------- G4: vencidas por faixa ----------
+    const faixas = {"1 a 7 dias":0,"8 a 15 dias":0,"16 a 30 dias":0,
+                    "31 a 60 dias":0,"mais de 60":0};
+
+    ag.filter(a => a.tem_data).forEach(a => {
+      const d = diasAte(a.grupo);
+      if (d === null || d >= 0) return;
+      const at = Math.abs(d);
+      if (at <= 7)       faixas["1 a 7 dias"]   += a[metrica];
+      else if (at <= 15) faixas["8 a 15 dias"]  += a[metrica];
+      else if (at <= 30) faixas["16 a 30 dias"] += a[metrica];
+      else if (at <= 60) faixas["31 a 60 dias"] += a[metrica];
+      else               faixas["mais de 60"]   += a[metrica];
+    });
+
+    const fk = Object.keys(faixas), fv = fk.map(k => faixas[k]);
+
+    if (fv.some(v => v > 0)){
+      Plotly.react("g4", [{
+        type:"bar", x:fk, y:fv,
+        text: fv.map(v => fmt(v)),
+        textposition:"outside",
+        marker:{color:["#FFCDD2","#EF9A9A","#E57373","#EF5350","#C62828"]},
+        hovertemplate:"%{x}<br><b>%{y:,}</b><extra></extra>",
+      }], lay({
+        title:{text:"Agenda vencida, por tempo de atraso"},
+        margin:{l:55,r:25,t:45,b:70},
+        xaxis:{tickangle:-25, tickfont:{size:10}},
+      }), CFG);
+    } else {
+      vazio("g4", "Nenhuma agenda vencida");
+    }
+
+    carregarDimensoes();
+  }
+
+  // ===================================================================
+  // G5 e G6
+  // ===================================================================
+  async function carregarDimensoes(){
+    try {
+      const pc = qs(); pc.set("dimensao","cidade");
+      const jc = await (await fetch(`${API}/matriz?${pc}`)).json();
+      if (jc.ok) renderDim(jc.celulas, "g5", "Top cidades");
+
+      const pp = qs(); pp.set("dimensao","parceira");
+      const jp = await (await fetch(`${API}/matriz?${pp}`)).json();
+      if (jp.ok) renderDim(jp.celulas, "g6", "Top parceiras");
+    } catch(e){ console.error("[dimensoes]", e); }
+  }
+
+  function renderDim(celulas, id, titulo){
+    if (!celulas || !celulas.length){ vazio(id); return; }
+
+    const por = {};
+    celulas.forEach(c => {
+      if (!por[c.dim]) por[c.dim] = {com:0, sem:0, fora:0};
+      if (c.ordem === 1)      por[c.dim].com  += c[metrica];
+      else if (c.ordem === 2) por[c.dim].sem  += c[metrica];
+      else                    por[c.dim].fora += c[metrica];
+    });
+
+    const lista = Object.entries(por)
+      .sort((a,b) => (b[1].com+b[1].sem+b[1].fora) -
+                     (a[1].com+a[1].sem+a[1].fora))
+      .slice(0,12);
+
+    Plotly.react(id, [
+      {type:"bar", orientation:"h", name:"Fora",
+       y:lista.map(x=>x[0]).reverse(), x:lista.map(x=>x[1].fora).reverse(),
+       marker:{color:CORES.cinza}},
+      {type:"bar", orientation:"h", name:"Sem agenda",
+       y:lista.map(x=>x[0]).reverse(), x:lista.map(x=>x[1].sem).reverse(),
+       marker:{color:CORES.vermelho}},
+      {type:"bar", orientation:"h", name:"Com agenda",
+       y:lista.map(x=>x[0]).reverse(), x:lista.map(x=>x[1].com).reverse(),
+       marker:{color:CORES.verde}},
+    ], lay({
+      title:{text:titulo},
+      barmode:"stack",
+      height:400,
+      margin:{l:150,r:30,t:45,b:60},
+      showlegend:true,
+      legend:{orientation:"h", y:-0.12, font:{size:10}},
+      yaxis:{tickfont:{size:10}},
+    }), CFG);
+  }
+
+  // ===================================================================
+  // TABELA DA AGENDA
+  // ===================================================================
+  function renderTabelaAgenda(j){
+    const ag = j.agenda || [];
+    const tb = document.getElementById("tb-agenda");
+
+    if (!ag.length){
+      tb.innerHTML = '<tr><td colspan="6" class="text-center text-muted p-4">'+
+                     'Sem dados</td></tr>';
+      return;
+    }
+
+    const totalOs = j.kpis.os_backlog || 1;
+
+    const ord = ag.slice().sort((a,b) => {
+      if (a.ordem !== b.ordem) return a.ordem - b.ordem;
+      if (a.tem_data && b.tem_data){
+        const da = diasAte(a.grupo), db = diasAte(b.grupo);
+        if (da >= 0 && db < 0) return -1;
+        if (da < 0 && db >= 0) return 1;
+        return da - db;
+      }
+      return b.os - a.os;
+    });
+
+    let html = ord.map(a => {
+      let badge = '<span class="badge badge-sem">sem data</span>';
+      if (a.tem_data){
+        const s = situacaoData(a.grupo);
+        badge = s === "hoje"    ? '<span class="badge badge-hoje">hoje</span>'
+              : s === "vencida" ? '<span class="badge badge-vencida">vencida</span>'
+              : '<span class="badge badge-futura">futura</span>';
+      }
+      if (!a.no_backlog) badge = '<span class="badge bg-secondary">fora</span>';
+
+      return `<tr>
+        <td>${a.grupo}</td>
+        <td style="text-align:left;">${badge}</td>
+        <td>${fmt(a.os)}</td>
+        <td>${fmt(a.contratos)}</td>
+        <td>${fmt(a.linhas)}</td>
+        <td>${a.os ? fmtPct(a.os/totalOs*100) : "-"}</td>
+      </tr>`;
+    }).join("");
+
+    html += `<tr class="total">
+      <td>TOTAL</td><td></td>
+      <td>${fmt(j.kpis.os_backlog)}</td>
+      <td>${fmt(j.kpis.contratos)}</td>
+      <td>${fmt(j.kpis.linhas)}</td>
+      <td>100,0%</td></tr>`;
+
+    tb.innerHTML = html;
+    document.getElementById("tit-detalhe").textContent =
+      `AGENDA DIA A DIA · ${ag.length} grupos`;
+  }
+
+  // ===================================================================
+  // MOTIVOS
+  // ===================================================================
+  function renderMotivos(lista){
+    const tb = document.getElementById("tb-motivos");
+    if (!lista || !lista.length){
+      tb.innerHTML = '<tr><td colspan="3" class="text-center text-muted p-4">'+
+                     'Sem motivos</td></tr>';
+      vazio("g-mot");
+      return;
+    }
+
+    tb.innerHTML = lista.map(m => `<tr>
+      <td style="font-size:.72rem;">${m.motivo}</td>
+      <td>${fmt(m.os)}</td><td>${fmt(m.contratos)}</td></tr>`).join("");
+
+    Plotly.react("g-mot", [{
+      type:"bar", orientation:"h",
+      y: lista.map(m => m.motivo.substring(0,42)).reverse(),
+      x: lista.map(m => m[metrica]).reverse(),
+      text: lista.map(m => fmt(m[metrica])).reverse(),
+      textposition:"auto",
+      marker:{color:CORES.laranja},
+      hovertemplate:"%{y}<br><b>%{x:,}</b><extra></extra>",
+    }], lay({
+      title:{text:"Top motivos de reagendamento"},
+      height:420,
+      margin:{l:250,r:50,t:45,b:45},
+      yaxis:{tickfont:{size:10}},
+    }), CFG);
+  }
+
+  // ===================================================================
+  // MATRIZ
+  // ===================================================================
+  async function carregarMatriz(){
+    const p = qs(); p.set("dimensao", dimensao);
+    const tb = document.getElementById("tb-matriz");
+    tb.innerHTML = '<tbody><tr><td class="text-center text-muted p-4">'+
+                   'Carregando...</td></tr></tbody>';
+    try {
+      const j = await (await fetch(`${API}/matriz?${p}`)).json();
+      if (!j.ok){ status.textContent = "Erro: " + j.erro; return; }
+      matriz = j;
+      renderMatriz(j);
+    } catch(e){ console.error("[matriz]", e); }
+  }
+
+  function renderMatriz(j){
+    const cel = j.celulas || [];
+    const tb = document.getElementById("tb-matriz");
+
+    if (!cel.length){
+      tb.innerHTML = '<tbody><tr><td class="text-center text-muted p-4">'+
+                     'Sem dados</td></tr></tbody>';
+      return;
+    }
+
+    function categoria(c){
+      if (!c.tem_data){
+        if (c.ordem === 3) return "Fora do backlog";
+        return c.grupo.indexOf("NUNCA") >= 0 ? "Nunca agendada" : "Reagendada";
+      }
+      const d = diasAte(c.grupo);
+      if (d === null) return "Sem data";
+      if (d < 0)   return "Vencida";
+      if (d === 0) return "Hoje";
+      if (d <= 7)  return "Próx. 7 dias";
+      if (d <= 30) return "Próx. 30 dias";
+      return "Mais de 30";
+    }
+
+    const COLS = ["Hoje","Próx. 7 dias","Próx. 30 dias","Mais de 30",
+                  "Vencida","Nunca agendada","Reagendada","Fora do backlog"];
+
+    const linhas = {};
+    cel.forEach(c => {
+      if (!linhas[c.dim]) linhas[c.dim] = {total:0};
+      const cat = categoria(c);
+      linhas[c.dim][cat] = (linhas[c.dim][cat]||0) + c[metrica];
+      linhas[c.dim].total += c[metrica];
+    });
+
+    const ord = Object.entries(linhas).sort((a,b)=>b[1].total-a[1].total);
+    const rot = {cidade:"Cidade", parceira:"Parceira", cluster:"Cluster"};
+
+    document.getElementById("tit-matriz").textContent =
+      `${rot[dimensao].toUpperCase()} × SITUAÇÃO DA AGENDA · ${ord.length} itens`;
+
+    let maxV = 0;
+    ord.forEach(([,v]) => COLS.forEach(c => { if (v[c] > maxV) maxV = v[c]; }));
+
+    function cls(v, col){
+      if (!v) return 'style="color:#CFD8DC"';
+      if (col === "Fora do backlog")
+        return 'style="background:#ECEFF1;color:#78909C"';
+      if (col === "Vencida")
+        return 'style="background:#FFEBEE;color:#C62828;font-weight:600"';
+      if (col.indexOf("agendada") >= 0 || col === "Reagendada")
+        return 'style="background:#FFF3E0;color:#E65100"';
+      const r = v/maxV;
+      if (r > .5) return 'style="background:#A5D6A7;font-weight:700"';
+      if (r > .2) return 'style="background:#C8E6C9;font-weight:600"';
+      return 'style="background:#E8F5E9"';
+    }
+
+    let html = `<thead><tr><th>${rot[dimensao]}</th>`;
+    COLS.forEach(c => html += `<th>${c}</th>`);
+    html += "<th>Total</th></tr></thead><tbody>";
+
+    ord.forEach(([dim,v]) => {
+      html += `<tr><td>${dim}</td>`;
+      COLS.forEach(c => {
+        const val = v[c] || 0;
+        html += `<td ${cls(val,c)}>${val ? fmt(val) : "-"}</td>`;
+      });
+      html += `<td><b>${fmt(v.total)}</b></td></tr>`;
+    });
+
+    html += `<tr class="total"><td>TOTAL</td>`;
+    let soma = 0;
+    COLS.forEach(c => {
+      const s = ord.reduce((a,[,v]) => a + (v[c]||0), 0);
+      soma += s;
+      html += `<td>${fmt(s)}</td>`;
+    });
+    html += `<td>${fmt(soma)}</td></tr></tbody>`;
+
+    tb.innerHTML = html;
+  }
+
+  // ===================================================================
+  // EVOLUTIVO
+  // ===================================================================
+  async function carregarEvolutivo(){
+    try {
+      const j = await (await fetch(`${API}/evolutivo?${qs()}`)).json();
+      if (!j.ok) return;
+      evo = j;
+      renderEvolutivo(j);
+    } catch(e){ console.error("[evolutivo]", e); }
+  }
+
+  function renderEvolutivo(j){
+    const aviso = document.getElementById("aviso-evo");
+
+    if (!j.qtd_fotos){
+      aviso.innerHTML = '<div class="alert alert-warning py-2 small">'+
+        'Nenhuma foto no histórico para este recorte.</div>';
+      vazio("g-evo");
+      return;
+    }
+
+    aviso.innerHTML = j.qtd_fotos === 1
+      ? '<div class="alert alert-warning py-2 small">'+
+        '<b>Apenas 1 foto no histórico.</b> O evolutivo ganha valor '+
+        'conforme as cargas diárias acumulam — a tarefa agendada roda '+
+        'todos os dias às 10h05.</div>'
+      : "";
+
+    Plotly.react("g-evo", [
+      {type:"scatter", mode:"lines+markers+text", name:"OS",
+       x:j.datas, y:j.os, text:j.os.map(v=>fmt(v)),
+       textposition:"top center", textfont:{size:10,color:CORES.cinza},
+       line:{color:CORES.cinza,width:3}, marker:{size:9}},
+      {type:"scatter", mode:"lines+markers", name:"Sem agenda",
+       x:j.datas, y:j.sem_data,
+       line:{color:CORES.vermelho,width:2}, marker:{size:7}},
+      {type:"scatter", mode:"lines+markers", name:"Com agenda",
+       x:j.datas, y:j.com_data,
+       line:{color:CORES.verde,width:2}, marker:{size:7}},
+    ], lay({
+      title:{text:"Evolução diária do backlog da Safra"},
+      height:380,
+      yaxis:{rangemode:"tozero"},
+      hovermode:"x unified",
+      showlegend:true,
+      legend:{orientation:"h", y:-0.14},
+      margin:{l:65,r:30,t:45,b:60},
+    }), CFG);
+
+    let html = "";
+    for (let i = j.datas.length-1; i >= 0; i--){
+      let vr = "-";
+      if (i > 0){
+        const dif = j.os[i] - j.os[i-1];
+        const cor = dif > 0 ? "#C62828" : "#2E7D32";
+        vr = `<span style="color:${cor};font-weight:600">${
+              dif > 0 ? "+" : ""}${fmt(dif)}</span>`;
+      }
+      html += `<tr>
+        <td>${j.datas[i]}</td><td>${fmt(j.os[i])}</td>
+        <td>${fmt(j.contratos[i])}</td>
+        <td style="color:#2E7D32">${fmt(j.com_data[i])}</td>
+        <td style="color:#C62828">${fmt(j.sem_data[i])}</td>
+        <td>${vr}</td></tr>`;
+    }
+    document.getElementById("tb-evo").innerHTML = html;
+  }
+
+  // ===================================================================
+  // CONSULTA
+  // ===================================================================
+  async function buscar(){
+    const c = document.getElementById("inp-contrato").value.trim();
+    const area = document.getElementById("res-consulta");
+    if (!c){ area.innerHTML = ""; return; }
+
+    area.innerHTML = '<div class="consulta-box text-center text-muted p-4">'+
+                     'Buscando...</div>';
+
+    try {
+      const j = await (await fetch(
+        `${API}/consulta?contrato=${encodeURIComponent(c)}`)).json();
+
+      if (!j.ok){
+        area.innerHTML = `<div class="alert alert-danger">${j.erro}</div>`;
+        return;
+      }
+      if (!j.encontrado){
+        area.innerHTML = '<div class="consulta-box text-center text-muted p-4">'+
+                         `Contrato <b>${c}</b> não encontrado</div>`;
+        return;
+      }
+
+      const i = j.identificacao, rs = j.resumo;
+      let h = "";
+
+      h += `<div class="section-header">CONTRATO ${i.contrato}</div>
+        <div class="consulta-box"><div class="ident-grid">
+          <div><div class="rot">Operadora</div><div class="val">${i.operadora}</div></div>
+          <div><div class="rot">Município</div><div class="val">${i.municipio}</div></div>
+          <div><div class="rot">UF</div><div class="val">${i.uf}</div></div>
+          <div><div class="rot">Cluster</div><div class="val">${i.cluster}</div></div>
+          <div><div class="rot">Subcluster</div><div class="val">${i.subcluster}</div></div>
+          <div><div class="rot">Segmento</div><div class="val">${i.segmento}</div></div>
+          <div><div class="rot">Status</div><div class="val">${i.status}</div></div>
+          <div><div class="rot">Téc. dedicado</div><div class="val">${i.tec_dedicado}</div></div>
+        </div></div>`;
+
+      h += `<div class="consulta-box"><div class="resumo-grid">
+          <div class="item"><div class="n">${rs.linhas_safra}</div>
+               <div class="l">linhas safra</div></div>
+          <div class="item"><div class="n">${rs.meses}</div>
+               <div class="l">meses</div></div>
+          <div class="item"><div class="n">${rs.equipamentos}</div>
+               <div class="l">equipamentos</div></div>
+          <div class="item"><div class="n">${rs.os_backlog}</div>
+               <div class="l">OS backlog</div></div>
+          <div class="item"><div class="n">${rs.fotos_backlog}</div>
+               <div class="l">fotos</div></div>
+          <div class="item"><div class="n">${rs.eventos_quebra}</div>
+               <div class="l">eventos quebra</div></div>
+          <div class="item"><div class="n">${rs.com_quebra}</div>
+               <div class="l">com quebra</div></div>
+        </div></div>`;
+
+      if (j.safra.length){
+        h += `<div class="section-header">SAFRA · ${j.safra.length} linhas</div>
+          <div class="tabela-card"><div class="tabela-scroll">
+          <table class="table table-sm table-hover"><thead><tr>
+            <th>Mês</th><th>Safra</th><th>Tipo</th><th>Situação</th>
+            <th>Equipamento</th><th>Serial</th><th>MAC</th>
+            <th>Dias</th><th>Parceira</th></tr></thead><tbody>` +
+          j.safra.map(s => `<tr>
+            <td>${s.mes}</td><td class="text-center">${s.safra}</td>
+            <td style="text-align:left;font-weight:400">${s.tipo}</td>
+            <td style="text-align:left"><span class="badge ${
+              s.pendencia==='RECUPERADO'?'bg-success':'bg-warning text-dark'
+            }">${s.pendencia}</span></td>
+            <td style="text-align:left;font-weight:400">${s.equipamento}</td>
+            <td style="text-align:left;font-weight:400">${s.serial}</td>
+            <td style="text-align:left;font-weight:400">${s.mac}</td>
+            <td>${fmt(s.dias)}</td>
+            <td style="text-align:left;font-weight:400">${s.parceira}</td>
+          </tr>`).join("") + `</tbody></table></div></div>`;
+      }
+
+      if (j.backlog.length){
+        h += `<div class="section-header">BACKLOG · ${j.backlog.length} OS</div>
+          <div class="tabela-card"><div class="tabela-scroll">
+          <table class="table table-sm table-hover"><thead><tr>
+            <th>OS</th><th>Situação</th><th>Classificação</th>
+            <th>Agenda</th><th>Abertura</th><th>Status</th>
+            <th>Motivo</th><th>Tecnologia</th></tr></thead><tbody>` +
+          j.backlog.map(b => `<tr>
+            <td>${b.os}</td>
+            <td style="text-align:left"><span class="badge ${
+              b.situacao==='AGENDADO'?'bg-success':'bg-danger'
+            }">${b.situacao}</span></td>
+            <td style="text-align:left;font-weight:400">${b.classificacao}</td>
+            <td>${b.dt_agenda || "-"}</td><td>${b.dt_abertura || "-"}</td>
+            <td style="text-align:left;font-weight:400">${b.status}</td>
+            <td style="text-align:left;font-weight:400">${b.motivo}</td>
+            <td style="text-align:left;font-weight:400">${b.tecnologia}</td>
+          </tr>`).join("") + `</tbody></table></div></div>`;
+      }
+
+      if (j.movimentacao.length){
+        h += `<div class="section-header">MOVIMENTAÇÃO · ${
+              j.movimentacao.length} registros</div>
+          <div class="consulta-box"><div class="timeline">` +
+          j.movimentacao.map(m => {
+            const cls = m.situacao === "AGENDADO" ? "ok" : "nok";
+            let inf = `<span class="badge ${
+              m.situacao==='AGENDADO'?'bg-success':'bg-danger'}">${m.situacao}</span>`;
+            if (m.classificacao) inf += " · " + m.classificacao;
+            if (m.dt_agenda) inf += " · agenda " + m.dt_agenda;
+            if (m.motivo) inf += "<br>motivo: " + m.motivo;
+            return `<div class="ev ${cls}">
+              <div class="dt">${m.data}${m.os ? " · OS "+m.os : ""}</div>
+              <div class="inf">${inf}</div></div>`;
+          }).join("") + `</div></div>`;
+      }
+
+      if (j.quebras.length){
+        h += `<div class="section-header">QUEBRA DE AGENDA · ${
+              j.quebras.length} eventos</div>
+          <div class="tabela-card"><div class="tabela-scroll">
+          <table class="table table-sm table-hover"><thead><tr>
+            <th>Data</th><th>OS</th><th>Status</th><th>Tratamento</th>
+            <th>Motivo</th><th>Responsável</th><th>Parceira</th>
+            <th>Bairro</th></tr></thead><tbody>` +
+          j.quebras.map(q => `<tr>
+            <td>${q.data}</td><td class="text-center">${q.os}</td>
+            <td style="text-align:left;font-weight:400">${q.status}</td>
+            <td style="text-align:left"><span class="badge ${
+              q.tratamento.indexOf('COM QUEBRA')>=0?'bg-danger':'bg-success'
+            }">${q.tratamento}</span></td>
+            <td style="text-align:left;font-weight:400">${q.motivo}</td>
+            <td style="text-align:left;font-weight:400">${q.responsavel}</td>
+            <td style="text-align:left;font-weight:400">${q.parceira}</td>
+            <td style="text-align:left;font-weight:400">${q.bairro}</td>
+          </tr>`).join("") + `</tbody></table></div></div>`;
+      }
+
+      area.innerHTML = h;
+
+    } catch(e){
+      area.innerHTML = `<div class="alert alert-danger">${e.message}</div>`;
+    }
+  }
+
+  // ===================================================================
+  // CSV
+  // ===================================================================
+  function baixarCsv(nome, cab, linhas){
+    const txt = [cab, ...linhas]
+      .map(l => l.map(c => `"${c ?? ""}"`).join(";")).join("\n");
+    const blob = new Blob(["\uFEFF"+txt], {type:"text/csv;charset=utf-8;"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = nome;
+    a.click();
+  }
+
+  // ===================================================================
+  // EVENTOS
+  // ===================================================================
+  document.getElementById("abas").addEventListener("click", e => {
+    const b = e.target.closest("button");
+    if (!b) return;
+
+    document.querySelectorAll("#abas button").forEach(x =>
+      x.classList.remove("active"));
+    document.querySelectorAll(".painel").forEach(x =>
+      x.classList.remove("active"));
+
+    b.classList.add("active");
+    painel = b.dataset.p;
+    document.getElementById("p-"+painel).classList.add("active");
+
+    const esconde = painel === "consulta";
+    document.getElementById("area-filtros").style.display = esconde?"none":"block";
+    document.getElementById("universo").style.display = esconde?"none":"flex";
+    document.getElementById("kpis").style.display = esconde?"none":"flex";
+
+    if (painel === "matriz"    && !matriz) carregarMatriz();
+    if (painel === "evolutivo" && !evo)    carregarEvolutivo();
+
+    setTimeout(() => {
+      document.querySelectorAll(`#p-${painel} .js-plotly-plot`)
+        .forEach(g => Plotly.Plots.resize(g));
+    }, 60);
+  });
+
+  document.querySelectorAll(".m-btn").forEach(b =>
+    b.addEventListener("click", () => {
+      document.querySelectorAll(".m-btn").forEach(x => x.classList.remove("active"));
+      b.classList.add("active");
+      metrica = b.dataset.m;
+      if (dados){ renderGraficos(dados); renderMotivos(dados.motivos); }
+      if (matriz) renderMatriz(matriz);
+    }));
+
+  document.querySelectorAll(".d-btn").forEach(b =>
+    b.addEventListener("click", () => {
+      document.querySelectorAll(".d-btn").forEach(x => x.classList.remove("active"));
+      b.classList.add("active");
+      dimensao = b.dataset.d;
+      carregarMatriz();
+    }));
+
+  document.getElementById("btn-limpar").addEventListener("click", () => {
+    _updating = true;
+    FIELDS.forEach(f => {
+      const c = choicesInstances[f];
+      if (c) c.removeActiveItems();
+    });
+    _updating = false;
+    refresh();
+  });
+
+  document.getElementById("btn-buscar").addEventListener("click", buscar);
+  document.getElementById("inp-contrato").addEventListener("keypress", e => {
+    if (e.key === "Enter") buscar();
+  });
+
+  document.getElementById("btn-csv-agenda").addEventListener("click", () => {
+    if (!dados) return;
+    baixarCsv("backlog_agenda.csv",
+      ["Agenda","No_backlog","Tem_data","OS","Contratos","Linhas"],
+      dados.agenda.map(a => [a.grupo, a.no_backlog?"SIM":"NAO",
+        a.tem_data?"SIM":"NAO", a.os, a.contratos, a.linhas]));
+  });
+
+  document.getElementById("btn-csv-matriz").addEventListener("click", () => {
+    if (!matriz) return;
+    baixarCsv(`backlog_${dimensao}.csv`,
+      ["Dimensao","Agenda","OS","Contratos","Linhas"],
+      matriz.celulas.map(c => [c.dim, c.grupo, c.os, c.contratos, c.linhas]));
+  });
+
+  // ===================================================================
+  // INICIALIZACAO
+  // ===================================================================
+  refresh();
+
+})();
+</script>
+
+{% endblock %}
