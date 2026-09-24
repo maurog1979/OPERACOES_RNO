@@ -37,6 +37,7 @@ COLS_SAFRA_ENRIQUECIDA = [
     # Outros dashboards
     "FAIXA_LOG", "TEM_ANALITICO", "TEM_TOA", "TEM_QAD",
     "TOA_STATUS", "TOA_PARCEIRA",
+    "CD_OS", "ANL_NR_OS", "TOA_ULT_DATA", "TOA_AREA",
     # Aging fallback
     "NR_DIAS_EM_ABERTO", "NR_AGING_OS",
 ]

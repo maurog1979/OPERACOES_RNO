@@ -1,8 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Visao Executiva - Desconexao{% endblock %}
 
-{% block head_extra %}
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js@10.2.0/public/assets/styles/choices.min.css">
+{% block extra_head %}
 <style>
 .dash-hero {
   background: linear-gradient(135deg, #E60000, #8B0000);
@@ -182,6 +181,7 @@
   margin-top: 4px !important;
 }
 </style>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard-executivo-pilot.css') }}">
 {% endblock %}
 
 {% block content %}
@@ -252,6 +252,10 @@
     <div class="dash-chart-card"><div id="fig5"></div></div>
     <div class="dash-chart-card"><div id="fig6"></div></div>
   </div>
+  <div class="dash-section-title">Eficiência de Recuperação por Parceira</div>
+  <div class="dash-charts-row row-12">
+    <div class="dash-chart-card dash-chart-card-wide"><div id="fig7"></div></div>
+  </div>
 </main>
 
 <div class="dash-loading active" id="dash-loading">
@@ -261,8 +265,6 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/choices.js@10.2.0/public/assets/scripts/choices.min.js"></script>
 <script>
 const choicesOpts = {
   removeItemButton: true,
@@ -336,7 +338,7 @@ async function loadData() {
     const j = await res.json();
     if (j.error) { showError(j.error); showLoading(false); return; }
     renderKpis(j.kpis);
-    ['fig1', 'fig2', 'fig3', 'fig4', 'fig5', 'fig6'].forEach(id => {
+    ['fig1', 'fig2', 'fig3', 'fig4', 'fig5', 'fig6', 'fig7'].forEach(id => {
       const f = j.figs[id];
       Plotly.newPlot(id, f.data, f.layout, PLOTLY_CONFIG);
     });
