@@ -40,6 +40,8 @@ ONDE SALVAR
 
 from flask import Blueprint, render_template, jsonify, request
 
+from data.ttl_response_cache import TTLResponseCache, canonical_request_key
+
 try:
     from data.db_desconexao import query, COLLATION
 except ImportError as e:
@@ -53,6 +55,23 @@ bp = Blueprint(
     url_prefix="/dash/quebra-rno",
     template_folder="templates",
 )
+
+# =====================================================================
+# CACHE DE RESPOSTA
+# =====================================================================
+# TTL de 15 minutos. O limite de 128 combinacoes evita crescimento
+# indefinido. A chave inclui o modo nesta versao para garantir que o
+# formato atual da resposta continue correto.
+quebra_rno_cache = TTLResponseCache(
+    ttl_seconds=900,
+    max_entries=128,
+    name="dash_quebra_rno",
+)
+
+
+def _cache_key_refresh():
+    return canonical_request_key("quebra-rno-refresh")
+
 
 
 # =====================================================================
@@ -262,6 +281,27 @@ def index():
     return render_template("dash_quebra_rno.html")
 
 
+
+
+# =====================================================================
+# API - CACHE
+# =====================================================================
+
+@bp.route("/api/cache/status")
+def api_cache_status():
+    return jsonify({"ok": True, "cache": quebra_rno_cache.stats()})
+
+
+@bp.route("/api/cache/clear", methods=["POST"])
+def api_cache_clear():
+    removidas = quebra_rno_cache.invalidate()
+    return jsonify({
+        "ok": True,
+        "removed": removidas,
+        "cache": quebra_rno_cache.stats(),
+    })
+
+
 # =====================================================================
 # API - STATUS
 # =====================================================================
@@ -295,6 +335,7 @@ def api_status():
 # =====================================================================
 
 @bp.route("/api/refresh")
+@quebra_rno_cache.cached(key_builder=_cache_key_refresh)
 def api_refresh():
     modo = request.args.get("mode", "quantidade").strip().lower()
     if modo not in {"quantidade", "taxa", "representatividade"}:
