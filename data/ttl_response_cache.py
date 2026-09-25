@@ -77,6 +77,11 @@ class TTLResponseCache:
     def _now() -> float:
         return time.monotonic()
 
+    @staticmethod
+    def _public_key(key: str) -> str:
+        """Identificador curto, estavel e sem expor a chave interna."""
+        return hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
+
     def _lock_for(self, key: str) -> threading.Lock:
         with self._guard:
             lock = self._locks.get(key)
@@ -150,7 +155,7 @@ class TTLResponseCache:
         age_ms = max(0.0, (self._now() - entry.created_at) * 1000.0)
         response.headers["X-Cache"] = cache_state
         response.headers["X-Cache-Age-Ms"] = f"{age_ms:.2f}"
-        response.headers["X-Cache-Key"] = key[:16]
+        response.headers["X-Cache-Key"] = self._public_key(key)
         return response
 
     def invalidate(self, prefix: str | None = None) -> int:
@@ -178,7 +183,7 @@ class TTLResponseCache:
                 "entries": len(self._entries),
                 "ttl_seconds": self.ttl_seconds,
                 "max_entries": self.max_entries,
-                "keys": [k[:16] for k in self._entries.keys()],
+                "keys": [self._public_key(k) for k in self._entries.keys()],
             })
             total = data["hits"] + data["misses"]
             data["hit_rate_pct"] = round(
@@ -240,7 +245,7 @@ class TTLResponseCache:
                     result = view_func(*args, **kwargs)
                     response = make_response(result)
                     response.headers["X-Cache"] = "MISS"
-                    response.headers["X-Cache-Key"] = key[:16]
+                    response.headers["X-Cache-Key"] = self._public_key(key)
 
                     pode_cachear = (
                         not cache_success_only
