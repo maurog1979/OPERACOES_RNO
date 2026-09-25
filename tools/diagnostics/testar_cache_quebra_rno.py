@@ -24,7 +24,20 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
+def localizar_raiz_projeto() -> Path:
+    """Sobe na arvore ate encontrar app.py e a pasta areas/."""
+    atual = Path(__file__).resolve().parent
+    candidatos = [atual, *atual.parents]
+    for pasta in candidatos:
+        if (pasta / "app.py").is_file() and (pasta / "areas").is_dir():
+            return pasta
+    raise RuntimeError(
+        "Raiz do projeto nao encontrada. Esperado app.py e areas/ "
+        "em algum diretorio pai do teste."
+    )
+
+
+ROOT = localizar_raiz_projeto()
 REPORTS = ROOT / "reports"
 REPORTS.mkdir(parents=True, exist_ok=True)
 
