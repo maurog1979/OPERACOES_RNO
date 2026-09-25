@@ -102,21 +102,24 @@ def main() -> int:
         warm_media = round(statistics.mean(r["elapsed_ms"] for r in warm_runs), 2)
         speedup = round(cold["elapsed_ms"] / warm_media, 2) if warm_media else None
 
-        # Nova chave: mode=taxa deve ser MISS na primeira vez e HIT depois.
+        # Modo local: URLs antigas com mode=taxa reutilizam a mesma base.
+        # A primeira chamada de Taxa deve ser HIT imediato, com a mesma
+        # chave e o mesmo JSON-base de Quantidade.
         taxa_cold = medir(client, URL_TAXA)
         taxa_warm = medir(client, URL_TAXA)
-        print(f"Cold taxa: {taxa_cold['elapsed_ms']:,.2f} ms | {taxa_cold['x_cache']}")
-        print(f"Warm taxa: {taxa_warm['elapsed_ms']:,.2f} ms | {taxa_warm['x_cache']}")
-        assert taxa_cold["x_cache"] == "MISS"
+        print(f"Taxa apos Quantidade: {taxa_cold['elapsed_ms']:,.2f} ms | {taxa_cold['x_cache']}")
+        print(f"Taxa repetida: {taxa_warm['elapsed_ms']:,.2f} ms | {taxa_warm['x_cache']}")
+        assert taxa_cold["x_cache"].startswith("HIT")
         assert taxa_warm["x_cache"].startswith("HIT")
-        assert taxa_cold["x_cache_key"] != cold["x_cache_key"]
+        assert taxa_cold["x_cache_key"] == cold["x_cache_key"]
+        assert taxa_cold["json"] == cold["json"]
 
         status = client.get(URL_STATUS)
         status_json = status.get_json()
         assert status.status_code == 200
-        assert status_json["cache"]["hits"] >= 4
-        assert status_json["cache"]["misses"] >= 2
-        assert status_json["cache"]["entries"] >= 2
+        assert status_json["cache"]["hits"] >= 5
+        assert status_json["cache"]["misses"] == 1
+        assert status_json["cache"]["entries"] == 1
 
     # Criterios de aceite realistas para ambiente local.
     criterios = {
@@ -127,7 +130,10 @@ def main() -> int:
             cold["x_cache"] == "MISS"
             and all(r["x_cache"].startswith("HIT") for r in warm_runs)
         ),
-        "isolamento_por_modo": taxa_cold["x_cache_key"] != cold["x_cache_key"],
+        "modo_reutiliza_mesma_base": (
+            taxa_cold["x_cache_key"] == cold["x_cache_key"]
+            and taxa_cold["x_cache"].startswith("HIT")
+        ),
     }
 
     resultado = {
@@ -169,7 +175,7 @@ def main() -> int:
         f"- Cold Quantidade: **{cold['elapsed_ms']:,.2f} ms**",
         f"- Warm Quantidade médio: **{warm_media:,.2f} ms**",
         f"- Ganho: **{speedup}x**",
-        f"- Cold Taxa: **{taxa_cold['elapsed_ms']:,.2f} ms**",
+        f"- Taxa após Quantidade: **{taxa_cold['elapsed_ms']:,.2f} ms**",
         f"- Warm Taxa: **{taxa_warm['elapsed_ms']:,.2f} ms**",
         "",
         "## Critérios",

@@ -347,6 +347,8 @@ ONDE SALVAR
   let controller = null;
   let currentMode = 'quantidade';
   let ultimoKpis = null;
+  // MODO_LOCAL_JS_ATIVO: resposta-base usada nos tres modos visuais.
+  let ultimoCharts = {};
 
   const fmtInt = new Intl.NumberFormat('pt-BR');
   const loading = document.getElementById('loading');
@@ -365,7 +367,7 @@ ONDE SALVAR
 
   function queryParams(){
     const params = new URLSearchParams();
-    params.set('mode', currentMode);
+    // O modo e exclusivamente visual e nao gera chamada ao backend.
     ids.forEach(id => selected(id).forEach(v => params.append(id, v)));
     return params;
   }
@@ -462,8 +464,16 @@ ONDE SALVAR
   function renderBar(id, data){
     const horizontal = ['g3','g4','g5','g6'].includes(id);
     const labels = data.labels || [];
-    const values = data.values || [];
     const custom = data.customdata || [];
+    // A API entrega todos os valores-base em customdata. A selecao do
+    // modo ocorre aqui, sem HTTP, SQL ou alteracao do cache.
+    const values = custom.map(item => {
+      if (currentMode === 'taxa') return Number(item.taxa || 0);
+      if (currentMode === 'representatividade') {
+        return Number(item.representatividade || 0);
+      }
+      return Number(item.quebras || 0);
+    });
 
     if (!labels.length){
       Plotly.purge(id);
@@ -551,7 +561,8 @@ ONDE SALVAR
 
       ids.forEach(id => setOptions(id, j.options[id] || []));
       updateKpis(j.kpis || {});
-      Object.entries(j.charts || {}).forEach(([id, data]) => renderBar(id, data));
+      ultimoCharts = j.charts || {};
+      Object.entries(ultimoCharts).forEach(([id, data]) => renderBar(id, data));
 
       const rows = j.diag && j.diag.rows ? fmtInt.format(j.diag.rows) : '';
       document.getElementById('statusText').textContent =
@@ -571,10 +582,13 @@ ONDE SALVAR
   // MODO
   // =================================================================
   function setMode(mode){
+    if (!['quantidade','taxa','representatividade'].includes(mode)) return;
     currentMode = mode;
     document.querySelectorAll('.mode-btn').forEach(btn =>
       btn.classList.toggle('active', btn.dataset.mode === mode));
-    refresh();
+
+    // Redesenho local: zero fetch, zero SQL e zero overlay.
+    Object.entries(ultimoCharts).forEach(([id, data]) => renderBar(id, data));
   }
 
   document.querySelectorAll('.mode-btn').forEach(btn =>

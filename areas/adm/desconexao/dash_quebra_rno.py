@@ -70,7 +70,12 @@ quebra_rno_cache = TTLResponseCache(
 
 
 def _cache_key_refresh():
-    return canonical_request_key("quebra-rno-refresh")
+    # MODO_LOCAL_JS_ATIVO
+    # O modo visual nao altera os dados-base e nao participa do cache.
+    return canonical_request_key(
+        "quebra-rno-refresh",
+        ignored_args={"mode"},
+    )
 
 
 
@@ -337,9 +342,9 @@ def api_status():
 @bp.route("/api/refresh")
 @quebra_rno_cache.cached(key_builder=_cache_key_refresh)
 def api_refresh():
-    modo = request.args.get("mode", "quantidade").strip().lower()
-    if modo not in {"quantidade", "taxa", "representatividade"}:
-        modo = "quantidade"
+    # O backend retorna uma base unica. Quantidade, Taxa e
+    # Representatividade sao escolhidas localmente no JavaScript.
+    modo = "quantidade"
 
     filtros = ler_filtros()
     where, p = montar_where(filtros)
