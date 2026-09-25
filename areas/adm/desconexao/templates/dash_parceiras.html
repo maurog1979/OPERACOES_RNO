@@ -58,7 +58,7 @@
 <div class="parc-wrap">
   <div class="parc-title-bar">
     <h2>🤝 DESCONEXAO RNO — PARCEIRAS</h2>
-    <a class="back" href="/area/area/area/adm/desconexao//">⬅ Voltar</a>
+    <a class="back" href="/area/adm/desconexao/">⬅ Voltar</a>
   </div>
 
   <div class="parc-filter-bar">
@@ -123,7 +123,7 @@
       const el = document.getElementById("parc-" + SLUG[f]);
       SELECTS[f] = el;
       CHOICES[f] = new Choices(el, {
-        removeItemButton: true,
+        allowHTML: false, removeItemButton: true,
         placeholderValue: "Todos...",
         searchPlaceholderValue: "Buscar...",
         shouldSort: false,
@@ -159,11 +159,16 @@
       const r = await fetch("/dash/parceiras/api/refresh?" + qs,
                             { signal: inflight.signal });
       const j = await r.json();
+      if (!r.ok || j.error) throw new Error(j.error || "Falha ao carregar dados");
       updateOptions(j.options || {}, filters);
       renderKPIs(j.empty ? null : j.kpis);
       renderFigs(j.empty ? {} : (j.figs || {}));
     } catch (e) {
-      if (e.name !== "AbortError") console.error("[parceiras] erro:", e);
+      if (e.name !== "AbortError") {
+        renderKPIs(null); renderFigs({});
+        document.getElementById("parc-kpis").textContent = "Não foi possível carregar os dados.";
+        console.error("[parceiras] erro:", e);
+      }
     } finally {
       showLoading(false);
     }
@@ -236,3 +241,4 @@
 })();
 </script>
 {% endblock %}
+

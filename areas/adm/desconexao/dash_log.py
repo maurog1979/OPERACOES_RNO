@@ -67,7 +67,7 @@ def prepare_df():
             df[col] = ""
 
     for col in CATEGORICAL_COLS:
-        df[col] = df[col].fillna("").astype(str).str.strip()
+        df[col] = df[col].astype("string").fillna("").astype(str).str.strip()
 
     return df
 
@@ -92,7 +92,7 @@ def apply_filters(df, filters):
     for col, vals in filters.items():
         vals = limpar_valores(vals)
         if col in dff.columns and vals:
-            dff = dff[dff[col].fillna("").astype(str).isin(vals)]
+            dff = dff[dff[col].astype("string").fillna("").astype(str).isin(vals)]
 
     return dff
 
@@ -114,7 +114,7 @@ def count_col(df, col, top=None, keep_order=None):
             "values": [],
         }
 
-    s = df[col].fillna("").astype(str).str.strip()
+    s = df[col].astype("string").fillna("").astype(str).str.strip()
     s = s[(s != "") & (s.str.lower() != "nan")]
 
     if s.empty:
@@ -152,7 +152,7 @@ def montar_kpis(df):
             "pct_log": 0,
         }
 
-    faixa = df["FAIXA_LOG"].fillna("").astype(str).str.strip()
+    faixa = df["FAIXA_LOG"].astype("string").fillna("").astype(str).str.strip()
 
     sem_log = int((faixa == FAIXA_SEM_LOG).sum())
     com_log = int(((faixa != "") & (faixa != FAIXA_SEM_LOG)).sum())
@@ -175,7 +175,7 @@ def chart_com_sem_log(df):
             "values": [],
         }
 
-    faixa = df["FAIXA_LOG"].fillna("").astype(str).str.strip()
+    faixa = df["FAIXA_LOG"].astype("string").fillna("").astype(str).str.strip()
 
     sem_log = int((faixa == FAIXA_SEM_LOG).sum())
     com_log = int(((faixa != "") & (faixa != FAIXA_SEM_LOG)).sum())
@@ -207,7 +207,7 @@ def chart_tipo_log(df):
             "totals": [],
         }
 
-    dff = df.copy()
+    dff = df[df["FAIXA_LOG"].astype("string").fillna("").str.strip().ne("")].copy()
     dff["STATUS_LOG"] = dff["FAIXA_LOG"].apply(
         lambda x: "SEM LOG" if str(x).strip() == FAIXA_SEM_LOG else "COM LOG"
     )
@@ -342,7 +342,7 @@ def count_col_fallback(df, candidatos, top=12, empty_title="Sem preenchimento no
         if df is None or df.empty or col not in df.columns:
             continue
 
-        s = df[col].fillna("").astype(str).str.strip()
+        s = df[col].astype("string").fillna("").astype(str).str.strip()
         s_valid = s[~s.str.lower().isin(valores_invalidos)]
 
         if s_valid.empty:
@@ -433,7 +433,7 @@ def api_options():
 
                 vals = limpar_valores(vals)
                 if col in dfx.columns and vals:
-                    dfx = dfx[dfx[col].fillna("").astype(str).isin(vals)]
+                    dfx = dfx[dfx[col].astype("string").fillna("").astype(str).isin(vals)]
 
             payload[alvo] = get_options(dfx, alvo)
 
@@ -444,7 +444,7 @@ def api_options():
             "ok": False,
             "error": True,
             "endpoint": "/dash/log/api/options",
-            "message": str(e),
+            "message": "Não foi possível carregar os dados.",
         }), 500
 
 
@@ -470,5 +470,6 @@ def api_data():
             "ok": False,
             "error": True,
             "endpoint": "/dash/log/api/data",
-            "message": str(e),
+            "message": "Não foi possível carregar os dados.",
         }), 500
+

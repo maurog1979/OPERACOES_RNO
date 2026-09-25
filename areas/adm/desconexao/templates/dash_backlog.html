@@ -94,7 +94,7 @@
 
   <div class="bkl-title-bar">
     <div><i class="bi bi-layers-fill"></i> DESCONEXAO RNO --- BACKLOG</div>
-    <a href="/area/area/adm/desconexao/"><i class="bi bi-arrow-left"></i> Voltar ao Hub</a>
+    <a href="/area/adm/desconexao/"><i class="bi bi-arrow-left"></i> Voltar ao Hub</a>
   </div>
 
   <div class="filter-bar">
@@ -186,7 +186,7 @@
     const el = document.getElementById(MAP[f]);
     const ph = el.getAttribute("data-ph") || "Selecione...";
     const c = new Choices(el, {
-      removeItemButton: true,
+      allowHTML: false, removeItemButton: true,
       shouldSort: false,
       placeholder: true,
       placeholderValue: ph,
@@ -308,3 +308,4 @@
 </script>
 
 {% endblock %}
+

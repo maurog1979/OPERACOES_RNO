@@ -186,7 +186,7 @@
 
 {% block content %}
 <main class="main">
-<a href="/area/area/area/adm/desconexao//" class="breadcrumb-link">
+<a href="/area/adm/desconexao/" class="breadcrumb-link">
     <div class="breadcrumb">
       <i class="fa-solid fa-house"></i> Home
       <i class="fa-solid fa-chevron-right"></i> ADM
@@ -265,7 +265,7 @@
 <script src="https://cdn.jsdelivr.net/npm/choices.js@10.2.0/public/assets/scripts/choices.min.js"></script>
 <script>
 const choicesOpts = {
-  removeItemButton: true,
+  allowHTML: false, removeItemButton: true,
   placeholderValue: 'Todos...',
   searchPlaceholderValue: 'Buscar...',
   shouldSort: false,

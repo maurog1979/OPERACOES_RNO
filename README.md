@@ -1,66 +1,51 @@
 # Portal Operações RNO
 
-Plataforma de inteligência operacional da Regional Norte da Claro.
+Portal Flask de indicadores operacionais da Regional Norte, com oito áreas de navegação e sete painéis disponíveis em ADM → Desconexão.
 
-## Como rodar
+## Executar localmente
 
-```bash
-pip install -r requirements.txt
+Requer Python 3.10 ou superior e um MySQL com as tabelas da operação.
+
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+Copy-Item .env.example .env
+# Preencha MYSQL_* e SECRET_KEY no .env.
 python run.py
 ```
 
-Acesse: http://localhost:5000
+Abra http://127.0.0.1:5000. O portal carrega `.env` automaticamente; variáveis existentes no ambiente têm prioridade. As páginas abrem sem pré-carregar o banco, e os painéis informam falhas ao consultar os dados.
 
-## Arquitetura em 3 níveis
+## Painéis e dados
 
-- **Nível 1 (Home)**: escolha de ÁREA (8 áreas)
-- **Nível 2 (Área)**: escolha de SETOR (quando existir)
-- **Nível 3 (Setor)**: dashboards específicos
+| Painel | Endereço | Fonte |
+|---|---|---|
+| Executivo | `/dash/executivo/` | `safra_final` |
+| LOG | `/dash/log/` | `safra_enriquecida` |
+| Parceiras | `/dash/parceiras/` | `safra_enriquecida`, `cidades_uf` quando UF estiver ausente |
+| Backlog | `/dash/backlog/` | `safra_enriquecida` |
+| Quebra | `/dash/quebra/` | `quebra_total` |
+| Retirada | `/dash/retirada/` | `safra_enriquecida`, somente `TEM_TOA = SIM` |
+| Safra | `/dash/safra/` | `safra_resumo_mensal`, `safra_resumo_diario` |
 
-## Rotas
+O repositório não inclui criação nem carga dessas tabelas. Veja [instalação](docs/installation.md), [rotas](docs/routes.md) e [revisão técnica](docs/revisao.md).
 
-| Rota | Descrição |
-|---|---|
-| `/` | Home com 8 áreas |
-| `/area/<area>` | Página da área (setores ou construção) |
-| `/area/<area>/<setor>` | Setor específico |
-| `/area/<area>/em-construcao` | Placeholder |
-| `/dash/executivo/` | Dashboard Executivo (Desconexão) |
-| `/dash/log/` | Dashboard Log (Desconexão) |
-| `/dash/parceiras/` | Dashboard Parceiras (Desconexão) |
-| `/dash/backlog/` | Dashboard Backlog (Desconexão) |
-| `/dash/quebra/` | Dashboard Quebra (Desconexão) |
-| `/dash/retirada/` | Dashboard Retirada |
-| `/dash/safra/` | Painel Safra |
+## Testes
 
-## Configuração de Banco
-
-As credenciais do MySQL são lidas de variáveis de ambiente (com fallback para dev):
-
-```
-MYSQL_HOST=localhost
-MYSQL_PORT=3306
-MYSQL_USER=root
-MYSQL_PASSWORD=
-MYSQL_DATABASE=safra
-SECRET_KEY=...
+```powershell
+python -m pip install -r requirements-dev.txt
+python -m pytest -q
 ```
 
-## 8 Áreas
+Os testes usam dados sintéticos e não acessam o MySQL real.
 
-1. **ADM** (ATIVO) — Administrativo · 2 setores (Desconexão, Segurança)
-2. OMR — Operação e Monitoramento de Rede
-3. INFRA — Infraestrutura de rede e datacenter
-4. IMPLANTAÇÃO — Projetos e implantações
-5. REDE EXTERNA — Planta externa
-6. RESIDENCIAL — Clientes residenciais
-7. EMPRESARIAL — Clientes corporativos
-8. BACKBONE — Espinha dorsal da rede
+## Configuração
 
-## Fases
+- `CACHE_TTL_SECONDS=300`: validade do cache em segundos; `0` desativa sua reutilização.
+- `PRELOAD_DATA=0`: permite iniciar o portal sem consultar o banco; `1` ativa pré-carga.
+- `FLASK_DEBUG=0`: depuração desativada por padrão.
+- `HOST=127.0.0.1` e `PORT=5000`: endereço de desenvolvimento.
+- `ENABLE_DIAGNOSTICS=0`: mantém endpoints de diagnóstico detalhado indisponíveis.
 
-- [x] **FASE 1**: Arquitetura navegável (esta entrega)
-- [ ] **FASE 2**: Migrar 6 dashboards do PORTAL_DESCONEXAO para `areas/adm/desconexao/`
-- [ ] **FASE 3**: Autenticação (Flask-Login)
-- [ ] **FASE 4**: Hospedagem VPS + domínio operacoesrno.com.br
-- [ ] **FASE 5**: Arquivar PORTAL_DESCONEXAO antigo
+Autenticação e implantação de produção ainda são etapas pendentes. O nome na barra superior é configuração visual, sem autenticação de usuário. Os recursos visuais dependem de CDNs. Para publicar, configure autenticação/controle de acesso e um servidor WSGI; `run.py` é o ponto de entrada para desenvolvimento.

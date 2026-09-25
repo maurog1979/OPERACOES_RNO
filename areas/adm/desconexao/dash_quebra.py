@@ -7,6 +7,9 @@ FASE 2B fix12
 from __future__ import annotations
 
 import os
+import time
+from config import Config
+from data.db import get_engine, cache_fresh
 import threading
 import traceback
 from datetime import datetime
@@ -14,6 +17,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from data.dates import parse_dates
 from flask import Blueprint, jsonify, render_template, request
 from sqlalchemy import create_engine, text
 
@@ -60,31 +64,7 @@ def _first_existing_attr(module: Any, names: list[str]) -> Any:
 
 
 def _make_engine():
-    try:
-        import config  # type: ignore
-        uri = _first_existing_attr(config, ["SQLALCHEMY_DATABASE_URI", "DATABASE_URI", "MYSQL_URI"])
-        if uri:
-            return create_engine(uri, pool_pre_ping=True)
-        cfg = _first_existing_attr(config, ["DB_CONFIG", "MYSQL_CONFIG", "DATABASE_CONFIG"])
-        if isinstance(cfg, dict):
-            user = cfg.get("user") or cfg.get("username") or cfg.get("USER") or "root"
-            password = cfg.get("password") or cfg.get("PASSWORD") or ""
-            host = cfg.get("host") or cfg.get("HOST") or "localhost"
-            port = cfg.get("port") or cfg.get("PORT") or 3306
-            database = cfg.get("database") or cfg.get("db") or cfg.get("DATABASE") or "safra"
-            return create_engine(f"mysql+pymysql://{user}:{password}@{host}:{port}/{database}?charset=utf8mb4", pool_pre_ping=True)
-    except Exception:
-        pass
-
-    uri = os.getenv("SQLALCHEMY_DATABASE_URI") or os.getenv("DATABASE_URI")
-    if uri:
-        return create_engine(uri, pool_pre_ping=True)
-    user = os.getenv("MYSQL_USER", "root")
-    password = os.getenv("MYSQL_PASSWORD", "")
-    host = os.getenv("MYSQL_HOST", "localhost")
-    port = os.getenv("MYSQL_PORT", "3306")
-    database = os.getenv("MYSQL_DATABASE", "safra")
-    return create_engine(f"mysql+pymysql://{user}:{password}@{host}:{port}/{database}?charset=utf8mb4", pool_pre_ping=True)
+    return get_engine()
 
 
 def _norm_upper(series: pd.Series) -> pd.Series:
@@ -93,9 +73,10 @@ def _norm_upper(series: pd.Series) -> pd.Series:
 
 def _safe_int_str(series: pd.Series, width: int | None = None) -> pd.Series:
     numeric = pd.to_numeric(series, errors="coerce")
+    numeric = numeric.where(numeric.mod(1).eq(0))
     out = numeric.astype("Int64").astype("string").fillna("")
     if width:
-        out = out.str.zfill(width)
+        out = out.where(out.eq(""), out.str.zfill(width))
     return out
 
 
@@ -118,7 +99,7 @@ def _prepare_df(df: pd.DataFrame) -> pd.DataFrame:
     df["DIA"] = _safe_int_str(df["DIA"], 2)
 
     dt = pd.to_datetime(df["DT_AGENDA"], format="%d/%m/%Y %H:%M", errors="coerce")
-    dt_alt = pd.to_datetime(df["DT_AGENDA"], dayfirst=True, errors="coerce")
+    dt_alt = parse_dates(df["DT_AGENDA"])
     df["DATA"] = dt.fillna(dt_alt)
 
     missing_ano = df["ANO"].eq("") & df["DATA"].notna()
@@ -143,7 +124,7 @@ def _prepare_df(df: pd.DataFrame) -> pd.DataFrame:
 def _load_df(force: bool = False, wait: bool = True) -> pd.DataFrame:
     """Carrega quebra_total em cache com warmup e espera segura."""
     with _LOCK:
-        if _STATE["df"] is not None and not force:
+        if _STATE["df"] is not None and not force and cache_fresh(_STATE.get("clock")):
             return _STATE["df"]
 
         if _STATE["loading"]:
@@ -161,6 +142,7 @@ def _load_df(force: bool = False, wait: bool = True) -> pd.DataFrame:
         with _LOCK:
             return _STATE["df"] if _STATE["df"] is not None else pd.DataFrame(columns=COLS)
 
+    engine = None
     try:
         engine = _make_engine()
         start = datetime.now()
@@ -179,6 +161,7 @@ def _load_df(force: bool = False, wait: bool = True) -> pd.DataFrame:
         }
 
         with _LOCK:
+            _STATE["clock"] = time.monotonic()
             _STATE["df"] = df
             _STATE["load_time"] = datetime.now()
             _STATE["diag"] = diag
@@ -191,18 +174,20 @@ def _load_df(force: bool = False, wait: bool = True) -> pd.DataFrame:
         with _LOCK:
             _STATE["loading"] = False
             _STATE["load_error"] = f"{type(exc).__name__}: {exc}"
-            _STATE["diag"] = {"traceback": traceback.format_exc()}
+            _STATE["diag"] = {"traceback": "Consulte o log do servidor."}
 
         return pd.DataFrame(columns=COLS)
 
     finally:
+        if engine is not None:
+            engine.dispose()
         _LOAD_EVENT.set()
 
 
 def preload_quebra_cache_async(force: bool = False) -> None:
     """Aquece o cache em background na subida do app."""
     with _LOCK:
-        if _STATE["df"] is not None and not force:
+        if _STATE["df"] is not None and not force and cache_fresh(_STATE.get("clock")):
             return
         if _STATE["loading"]:
             return
@@ -221,7 +206,8 @@ def preload_quebra_cache_async(force: bool = False) -> None:
 @bp_quebra.record_once
 def _warmup_when_blueprint_registered(state) -> None:
     """Aquece o cache quando o Blueprint é registrado pelo Flask."""
-    preload_quebra_cache_async(force=False)
+    if state.app.config.get("PRELOAD_DATA") and not state.app.testing:
+        preload_quebra_cache_async(force=False)
 
 def _list_arg(name: str) -> list[str]:
     values = request.args.getlist(name)
@@ -287,7 +273,7 @@ def _series_payload(df_axis: pd.DataFrame, df_kpi_base: pd.DataFrame, group_col:
         grp["valor"] = grp["representatividade"]
     else:
         grp["valor"] = grp["quebras"]
-    grp = grp.sort_values("valor", ascending=not sort_desc)
+    grp = grp.sort_values(group_col if group_col in {"DIA", "MES"} else "valor", ascending=True if group_col in {"DIA", "MES"} else not sort_desc)
     if top:
         grp = grp.head(top)
     return {
@@ -302,7 +288,7 @@ def _series_payload(df_axis: pd.DataFrame, df_kpi_base: pd.DataFrame, group_col:
 def _chart_data(df: pd.DataFrame, filters: dict[str, list[str]], chart_id: str, group_col: str, title: str, mode: str, top: int | None = None, sort_desc: bool = True) -> dict[str, Any]:
     df_kpi = _apply_filters(df, filters, exclude=None)
     df_axis = _apply_filters(df, filters, exclude=EXCLUDE_MAP.get(chart_id))
-    return _series_payload(df_axis, df_kpi, group_col, title, mode, top=top, sort_desc=sort_desc)
+    return _series_payload(df_axis, df_axis, group_col, title, mode, top=top, sort_desc=sort_desc)
 
 
 
@@ -327,14 +313,14 @@ def index():
 @bp_quebra.route("/api/status")
 def api_status():
     df = _STATE.get("df")
-    return jsonify({"ok": _STATE.get("load_error") is None, "loaded": df is not None, "loading": bool(_STATE.get("loading")), "rows": int(len(df)) if isinstance(df, pd.DataFrame) else 0, "load_error": _STATE.get("load_error"), "diag": _STATE.get("diag") or {}})
+    return jsonify({"ok": _STATE.get("load_error") is None, "loaded": df is not None, "loading": bool(_STATE.get("loading")), "rows": int(len(df)) if isinstance(df, pd.DataFrame) else 0, "load_error": "Dados temporariamente indisponíveis." if _STATE.get("load_error") else None, "diag": _STATE.get("diag") or {}})
 
 
 @bp_quebra.route("/api/debug")
 def api_debug():
     force = request.args.get("force", "0") == "1"
     df = _load_df(force=force)
-    return jsonify({"ok": _STATE.get("load_error") is None, "rows": int(len(df)), "loading": bool(_STATE.get("loading")), "load_error": _STATE.get("load_error"), "diag": _STATE.get("diag") or {}, "columns": list(df.columns), "sample": df.head(5).fillna("").to_dict(orient="records")})
+    return jsonify({"ok": _STATE.get("load_error") is None, "rows": int(len(df)), "loading": bool(_STATE.get("loading")), "load_error": "Dados temporariamente indisponíveis." if _STATE.get("load_error") else None, "diag": _STATE.get("diag") or {}, "columns": list(df.columns), "sample": df.head(5).fillna("").to_dict(orient="records")})
 
 
 @bp_quebra.route("/api/refresh")
@@ -345,7 +331,7 @@ def api_refresh():
         mode = "quantidade"
     df = _load_df(force=force)
     if df.empty and _STATE.get("load_error"):
-        return jsonify({"ok": False, "error": _STATE.get("load_error"), "diag": _STATE.get("diag")}), 500
+        return jsonify({"ok": False, "error": "Dados temporariamente indisponíveis."}), 500
     filters = _filters_from_request()
     df_kpi = _apply_filters(df, filters, exclude=None)
     return jsonify({
@@ -364,3 +350,4 @@ def api_refresh():
         },
         "diag": _STATE.get("diag") or {},
     })
+

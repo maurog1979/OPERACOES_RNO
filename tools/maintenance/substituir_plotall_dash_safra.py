@@ -1,6 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import sys
+if "--apply-legacy-patch" not in sys.argv:
+    raise SystemExit("Patch histórico desativado. Use Git para atualizar o portal. Para reaplicar explicitamente: --apply-legacy-patch")
+
 from pathlib import Path
 import shutil
 from datetime import datetime

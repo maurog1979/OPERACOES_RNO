@@ -4,6 +4,9 @@
 from flask import Blueprint, render_template, jsonify, request
 
 import pymysql
+import math
+import re
+from collections import defaultdict
 import traceback
 import logging
 
@@ -16,7 +19,8 @@ logger = logging.getLogger(__name__)
 bp = Blueprint(
     "dash_safra",
     __name__,
-    url_prefix="/dash/safra"
+    url_prefix="/dash/safra",
+    template_folder="templates"
 )
 
 # =====================================================
@@ -32,7 +36,7 @@ DB_CONFIG = Config.db_config_pymysql()
 def get_conn():
 
     return pymysql.connect(
-        **DB_CONFIG,
+        **Config.db_config_pymysql(),
         cursorclass=pymysql.cursors.DictCursor
     )
 
@@ -91,6 +95,8 @@ def build_where(filters, tabela):
         if chave == "dia" and tabela == "safra_resumo_mensal":
             continue
 
+        if chave not in campos:
+            continue
         campo = campos[chave]
 
         if "," in valor:
@@ -229,17 +235,18 @@ def diagnostico():
 
     try:
 
+        query("SELECT 1 AS ok")
         return jsonify({
             "ok": True,
-            "banco": "safra"
+            "banco": Config.DB_NAME
         })
 
     except Exception as e:
 
         return jsonify({
             "ok": False,
-            "erro": str(e)
-        })
+            "erro": "Dados temporariamente indisponíveis."
+        }), 503
 
 # =====================================================
 # OPTIONS
@@ -325,11 +332,11 @@ def options():
         })
 
     except Exception:
-
+        logger.exception("Falha na API Safra")
         return jsonify({
             "ok": False,
-            "erro": traceback.format_exc()
-        })
+            "erro": "Não foi possível carregar os dados."
+        }), 503
 
 # =====================================================
 # DATA
@@ -339,378 +346,122 @@ def options():
 # HELPERS
 # =====================================================
 
-def to_float(v):
-
+def to_float(value):
     try:
-        return float(v or 0)
-
-    except:
+        number = float(value or 0)
+        return number if math.isfinite(number) else 0.0
+    except (ValueError, TypeError):
         return 0.0
 
 
-def to_int(v):
-
-    try:
-        return int(float(v or 0))
-
-    except:
-        return 0
+def to_int(value):
+    return int(to_float(value))
 
 
-# =====================================================
-# KPI
-# =====================================================
+def _natural(value):
+    number = re.search(r"\d+", str(value or ""))
+    return (int(number.group()) if number else 999, str(value or ""))
+
+
+def _detail_rows(rows):
+    """Um único nível por período/safra/tipo evita somar RNO + UF + cidades."""
+    groups = defaultdict(list)
+    for row in rows:
+        groups[tuple(row.get(k) for k in ("ano", "mes", "dia", "safra", "ds_tipo_desconexao"))].append(row)
+    result = []
+    priority = {"CIDADE": 0, "UF": 1, "RNO": 2}
+    for group in groups.values():
+        levels = {str(r.get("nivel") or "").upper() for r in group}
+        level = min(levels, key=lambda v: (priority.get(v, 3), v))
+        result.extend(r for r in group if str(r.get("nivel") or "").upper() == level)
+    return result
+
+
+def _totals(rows):
+    desc = sum(to_float(r.get("desc_total")) for r in rows)
+    rec = sum(to_float(r.get("rec_total")) for r in rows)
+    target = sum(to_float(r.get("meta_qtd")) if r.get("meta_qtd") is not None
+                 else to_float(r.get("desc_total")) * to_float(r.get("meta_percentual")) / 100
+                 for r in rows)
+    return desc, rec, target
+
+
+def _latest_daily(rows):
+    groups = {}
+    for row in rows:
+        key = tuple(row.get(k) for k in ("ano", "mes", "nivel", "uf", "cidade", "safra", "ds_tipo_desconexao"))
+        if key not in groups or to_int(row.get("dia")) > to_int(groups[key].get("dia")):
+            groups[key] = row
+    return list(groups.values())
+
+
+def _monthly_snapshot(rows):
+    """Filtro de dia usa o acumulado da última data selecionada, sem somar snapshots."""
+    return [dict(r, desc_total=r.get("desc_total_mes"), rec_total=r.get("rec_acumulado"))
+            for r in _latest_daily(rows)]
+
 
 def montar_kpis(mensal, diario):
-
-    if not mensal:
-
-        return {
-            "desc": 0,
-            "rec": 0,
-            "pct": 0,
-            "meta": 0,
-            "gap_vol": 0,
-            "gap_pct": 0,
-            "faltam": 0,
-            "necessario_dia": 0,
-            "tendencia": "SEM DADOS"
-        }
-
-    desc = sum(
-        to_float(x.get("desc_total"))
-        for x in mensal
-    )
-
-    rec = sum(
-        to_float(x.get("rec_total"))
-        for x in mensal
-    )
-
-    meta = (
-        sum(
-            to_float(x.get("meta_percentual"))
-            for x in mensal
-        )
-        / max(len(mensal), 1)
-    )
-
-    gap_vol = sum(
-        to_float(x.get("gap_vol"))
-        for x in mensal
-    )
-
-    gap_pct = (
-        sum(
-            to_float(x.get("gap_pp"))
-            for x in mensal
-        )
-        / max(len(mensal), 1)
-    )
-
-    faltam = sum(
-        to_float(x.get("faltam_recuperar"))
-        for x in mensal
-    )
-
-    pct = 0
-
-    if desc > 0:
-
-        pct = (
-            rec / desc
-        ) * 100
-
-    necessario = 0
-
-    if diario:
-
-        ultimo = sorted(
-            diario,
-            key=lambda x: (
-                to_int(x.get("ano")),
-                to_int(x.get("mes")),
-                to_int(x.get("dia"))
-            )
-        )[-1]
-
-        necessario = to_float(
-            ultimo.get("necessario_por_dia")
-        )
-
-    if gap_pct >= 0:
-
-        tendencia = "ACIMA DA META"
-
-    elif gap_pct >= -5:
-
-        tendencia = "PRÓXIMO DA META"
-
-    else:
-
-        tendencia = "ABAIXO DA META"
-
-    return {
-
-        "desc": round(desc),
-
-        "rec": round(rec),
-
-        "pct": round(pct, 2),
-
-        "meta": round(meta, 2),
-
-        "gap_vol": round(gap_vol),
-
-        "gap_pct": round(gap_pct, 2),
-
-        "faltam": round(faltam),
-
-        "necessario_dia": round(necessario),
-
-        "tendencia": tendencia
-    }
+    rows = _detail_rows(mensal)
+    desc, rec, target = _totals(rows)
+    pct = rec / desc * 100 if desc else 0
+    meta = target / desc * 100 if desc else 0
+    gap = pct - meta
+    daily = _latest_daily(_detail_rows(diario))
+    # A necessidade diária refere-se ao período mais recente selecionado.
+    latest_period = max(((to_int(r.get("ano")), to_int(r.get("mes"))) for r in daily), default=None)
+    necessary = sum(to_float(r.get("necessario_por_dia")) for r in daily
+                    if (to_int(r.get("ano")), to_int(r.get("mes"))) == latest_period)
+    return {"desc": round(desc), "rec": round(rec), "pct": round(pct, 2),
+            "meta": round(meta, 2), "gap_vol": round(rec - target), "gap_pct": round(gap, 2),
+            "faltam": max(0, math.ceil(target - rec)), "necessario_dia": math.ceil(necessary),
+            "tendencia": "SEM DADOS" if not desc else "ACIMA DA META" if gap >= 0
+                         else "PRÓXIMO DA META" if gap >= -5 else "ABAIXO DA META"}
 
 
-# =====================================================
-# RANKING
-# =====================================================
+def _percent_groups(rows, key, output):
+    groups = defaultdict(list)
+    for row in rows:
+        groups[row.get(key) or "N/I"].append(row)
+    result = []
+    for label, group in groups.items():
+        desc, rec, _ = _totals(group)
+        result.append({output: label, "pct": round(rec / desc * 100, 2) if desc else 0})
+    return result
+
 
 def montar_ranking(mensal):
+    rows = [r for r in mensal if str(r.get("nivel") or "").upper() == "CIDADE"]
+    return sorted(_percent_groups(rows, "cidade", "cidade"), key=lambda r: r["pct"], reverse=True)
 
-    cidades = {}
-
-    for r in mensal:
-
-        if r.get("nivel") != "CIDADE":
-            continue
-
-        cidade = r.get("cidade")
-
-        cidades.setdefault(
-            cidade,
-            []
-        ).append(
-            to_float(
-                r.get("perc_rec")
-            )
-        )
-
-    ranking = []
-
-    for cidade, valores in cidades.items():
-
-        ranking.append({
-
-            "cidade": cidade,
-
-            "pct": round(
-                sum(valores)
-                / len(valores),
-                2
-            )
-        })
-
-    ranking.sort(
-        key=lambda x: x["pct"],
-        reverse=True
-    )
-
-    return ranking
-
-# =====================================================
-# COMPARATIVO
-# =====================================================
 
 def montar_comparativo(mensal):
+    return sorted(_percent_groups(_detail_rows(mensal), "safra", "safra"), key=lambda r: _natural(r["safra"]))
 
-    grupo = {}
-
-    for r in mensal:
-
-        safra = r.get("safra")
-
-        grupo.setdefault(
-            safra,
-            []
-        ).append(
-            to_float(
-                r.get("perc_rec")
-            )
-        )
-
-    saida = []
-
-    for safra, valores in grupo.items():
-
-        saida.append({
-
-            "safra": safra,
-
-            "pct": round(
-                sum(valores)
-                / len(valores),
-                2
-            )
-        })
-
-    return sorted(
-        saida,
-        key=lambda x: x["safra"]
-    )
-
-
-# =====================================================
-# TIPOS
-# =====================================================
 
 def montar_tipos(mensal):
+    return _percent_groups(_detail_rows(mensal), "ds_tipo_desconexao", "tipo")
 
-    grupo = {}
-
-    for r in mensal:
-
-        tipo = (
-            r.get("ds_tipo_desconexao")
-            or "N/I"
-        )
-
-        grupo.setdefault(
-            tipo,
-            []
-        ).append(
-            to_float(
-                r.get("perc_rec")
-            )
-        )
-
-    saida = []
-
-    for tipo, valores in grupo.items():
-
-        saida.append({
-
-            "tipo": tipo,
-
-            "pct": round(
-                sum(valores)
-                / len(valores),
-                2
-            )
-        })
-
-    return saida
-
-
-# =====================================================
-# MATRIZ
-# =====================================================
 
 def montar_matriz(mensal):
+    groups = defaultdict(list)
+    for row in mensal:
+        level = str(row.get("nivel") or "RNO").upper()
+        op = row.get("cidade") if level == "CIDADE" else row.get("uf") if level == "UF" else level
+        groups[(row.get("safra") or "N/I", level, row.get("uf"), op)].append(row)
+    result = []
+    for (safra, level, uf, op), rows in groups.items():
+        item = {"safra": safra, "operacao": op or level}
+        for prefix, marker in (("inad", "INAD"), ("opcao", "OP")):
+            subset = [r for r in rows if marker in str(r.get("ds_tipo_desconexao") or "").upper()]
+            desc, rec, target = _totals(subset)
+            item.update({prefix + "_desc": round(desc), prefix + "_rec": round(rec),
+                         prefix + "_pct": round(rec / desc * 100, 2) if desc else 0,
+                         prefix + "_gap_vol": round(rec - target),
+                         prefix + "_gap_pct": round((rec - target) / desc * 100, 2) if desc else 0})
+        result.append(item)
+    return sorted(result, key=lambda r: (_natural(r["safra"]), r["operacao"] != "RNO", r["operacao"]))
 
-    matriz = {}
-
-    for r in mensal:
-
-        op = (
-            r.get("cidade")
-            if r.get("nivel") == "CIDADE"
-            else "RNO"
-        )
-
-        safra = r.get("safra")
-
-        tipo = (
-            r.get(
-                "ds_tipo_desconexao"
-            ) or ""
-        ).upper()
-
-        chave = (
-            safra,
-            op
-        )
-
-        if chave not in matriz:
-
-            matriz[chave] = {
-
-                "operacao": op,
-
-                "safra": safra,
-
-                "inad_pct": 0,
-                "inad_desc": 0,
-                "inad_rec": 0,
-                "inad_gap_vol": 0,
-                "inad_gap_pct": 0,
-
-                "opcao_pct": 0,
-                "opcao_desc": 0,
-                "opcao_rec": 0,
-                "opcao_gap_vol": 0,
-                "opcao_gap_pct": 0
-            }
-
-        row = matriz[chave]
-
-        if "INAD" in tipo:
-
-            row["inad_pct"] = to_float(
-                r.get("perc_rec")
-            )
-
-            row["inad_desc"] = to_int(
-                r.get("desc_total")
-            )
-
-            row["inad_rec"] = to_int(
-                r.get("rec_total")
-            )
-
-            row["inad_gap_vol"] = round(
-                to_float(
-                    r.get("gap_vol")
-                )
-            )
-
-            row["inad_gap_pct"] = round(
-                to_float(
-                    r.get("gap_pp")
-                ),
-                2
-            )
-
-        else:
-
-            row["opcao_pct"] = to_float(
-                r.get("perc_rec")
-            )
-
-            row["opcao_desc"] = to_int(
-                r.get("desc_total")
-            )
-
-            row["opcao_rec"] = to_int(
-                r.get("rec_total")
-            )
-
-            row["opcao_gap_vol"] = round(
-                to_float(
-                    r.get("gap_vol")
-                )
-            )
-
-            row["opcao_gap_pct"] = round(
-                to_float(
-                    r.get("gap_pp")
-                ),
-                2
-            )
-
-    return list(
-        matriz.values()
-    )
 
 @bp.route("/api/data")
 def data():
@@ -841,6 +592,9 @@ def data():
         # diario
         #
 
+        if filters.get("dia") and filters["dia"].lower() != "all":
+            mensal = _monthly_snapshot(diario)
+
         kpis = montar_kpis(
             mensal,
             diario
@@ -884,8 +638,8 @@ def data():
         })
 
     except Exception:
-
+        logger.exception("Falha na API Safra")
         return jsonify({
             "ok": False,
-            "erro": traceback.format_exc()
-        })
+            "erro": "Não foi possível carregar os dados."
+        }), 503

@@ -780,7 +780,7 @@
     FILTERS.forEach(function (f) {
       const el = document.getElementById("f-" + f);
       choicesObj[f] = new Choices(el, {
-        removeItemButton: true,
+        allowHTML: false, removeItemButton: true,
         placeholder: true,
         placeholderValue: "Todos...",
         searchEnabled: true,
@@ -812,3 +812,4 @@
 })();
 </script>
 {% endblock %}
+

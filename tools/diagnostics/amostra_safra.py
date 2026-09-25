@@ -1,13 +1,11 @@
+from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from config import Config
 import pymysql
 import pandas as pd
 
-conn = pymysql.connect(
-    host='localhost',
-    user='root',
-    password='',
-    database='safra',
-    charset='utf8mb4'
-)
+conn = pymysql.connect(**Config.db_config_pymysql())
 
 for tabela in [
     'safra_resumo_mensal',

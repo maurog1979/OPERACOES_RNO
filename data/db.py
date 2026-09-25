@@ -1,27 +1,33 @@
-# -*- coding: utf-8 -*-
-
-# Compatibilidade com dashboards legados/migrados
-_DF_CACHE = {}
-_OPTIONS_CACHE = {}
-"""
-data/db.py
-Cache compartilhado de tabelas MySQL para todos os dashboards.
-"""
+"""Leitura de tabelas MySQL com cache isolado e expiração."""
+import logging
+import re
+import threading
 import time
+
 import pandas as pd
 from sqlalchemy import create_engine
-
 from config import Config
 
-DB_URL = Config.db_url()
-
-# ============================================================
-# Cache compartilhado: {nome_tabela: {"df": DataFrame, "ts": timestamp, "load_time": secs}}
-# ============================================================
 _CACHE = {}
+_LOCK = threading.RLock()
+logger = logging.getLogger(__name__)
+
+
+class DatabaseUnavailable(RuntimeError):
+    """Falha de leitura, distinta de uma tabela vazia."""
+
+
+def cache_fresh(timestamp):
+    return timestamp is not None and time.monotonic() - timestamp < Config.CACHE_TTL_SECONDS
+
 
 def get_engine():
-    return create_engine(DB_URL, pool_pre_ping=True)
+    return create_engine(Config.db_url(), pool_pre_ping=True, connect_args={
+        "connect_timeout": Config.DB_CONNECT_TIMEOUT,
+        "read_timeout": Config.DB_READ_TIMEOUT,
+        "write_timeout": Config.DB_READ_TIMEOUT,
+    })
+
 
 # Colunas REALMENTE usadas pelos dashboards (UNIAO de todos)
 # Se um dashboard precisar de outra coluna, adicione aqui.
@@ -36,6 +42,8 @@ COLS_SAFRA_ENRIQUECIDA = [
     "BKL_AREA_DESPACHO", "BKL_DIAS_AGENDAMENTO",
     # Outros dashboards
     "FAIXA_LOG", "TEM_ANALITICO", "TEM_TOA", "TEM_QAD",
+    "ANL_MOTIVO_REAGENDA", "ANL_QUEBRA_RESPONSAVEL", "ANL_QUEBRA_CENARIO",
+    "ANL_TIPO_TRATAMENTO", "LOG_ULT_TIPO_OS",
     "TOA_STATUS", "TOA_PARCEIRA",
     # Aging fallback
     "NR_DIAS_EM_ABERTO", "NR_AGING_OS",
@@ -48,70 +56,42 @@ TABLE_COLS = {
 }
 
 def load_table(table, categorical_cols=None, force_reload=False):
-    """
-    Carrega tabela do MySQL com cache compartilhado.
+    """Cache com expiração e cópias isoladas para cada consumidor."""
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", table):
+        raise ValueError("Nome de tabela inválido")
+    with _LOCK:
+        cached = _CACHE.get(table)
+        if force_reload or cached is None or not cache_fresh(cached.get("clock")):
+            start = time.monotonic()
+            engine = get_engine()
+            try:
+                query = f"SELECT * FROM `{table}`"
+                if table in TABLE_COLS:
+                    sample = pd.read_sql(f"SELECT * FROM `{table}` LIMIT 0", engine)
+                    available = {str(c).upper(): c for c in sample.columns}
+                    cols = [available[c] for c in TABLE_COLS[table] if c in available]
+                    if cols:
+                        selected = ", ".join("`" + c.replace("`", "``") + "`" for c in cols)
+                        query = f"SELECT {selected} FROM `{table}`"
+                df = pd.read_sql(query, engine)
+                df.columns = [str(c).upper() for c in df.columns]
+                _CACHE[table] = {
+                    "df": df, "clock": time.monotonic(), "ts": time.time(),
+                    "load_time": round(time.monotonic() - start, 2),
+                    "mem_mb": round(df.memory_usage(deep=True).sum() / 1024**2, 1),
+                    "rows": len(df), "cols": len(df.columns),
+                }
+            except Exception as exc:
+                logger.exception("Falha ao carregar %s", table)
+                raise DatabaseUnavailable("Dados temporariamente indisponíveis.") from exc
+            finally:
+                engine.dispose()
+        result = _CACHE[table]["df"].copy(deep=True)
+    for col in categorical_cols or []:
+        if col in result.columns:
+            result[col] = result[col].astype("category")
+    return result
 
-    - Se a tabela ja esta no cache, retorna instantaneamente.
-    - SELECT otimizado apenas das colunas necessarias (se mapeada).
-    - Aplica category type para reduzir RAM.
-
-    Args:
-        table: nome da tabela MySQL
-        categorical_cols: lista de colunas para converter em category
-        force_reload: forca recarga ignorando cache
-    """
-    global _CACHE
-    if not force_reload and table in _CACHE:
-        return _CACHE[table]["df"]
-
-    t0 = time.time()
-    engine = get_engine()
-
-    # Monta SELECT otimizado se a tabela tem colunas mapeadas
-    if table in TABLE_COLS:
-        cols = TABLE_COLS[table]
-        # Verifica quais colunas existem na tabela antes de selecionar
-        try:
-            sample = pd.read_sql(f"SELECT * FROM {table} LIMIT 1", engine)
-            cols_existentes = [c for c in cols if c in sample.columns]
-            cols_str = ", ".join(f"`{c}`" for c in cols_existentes)
-            query = f"SELECT {cols_str} FROM {table}"
-            print(f"[DB] {table}: SELECT otimizado ({len(cols_existentes)} cols)")
-        except Exception as e:
-            print(f"[DB] {table}: fallback para SELECT * ({e})")
-            query = f"SELECT * FROM {table}"
-    else:
-        query = f"SELECT * FROM {table}"
-
-    try:
-        df = pd.read_sql(query, engine)
-        engine.dispose()
-
-        # Aplica categoricals para reduzir RAM
-        if categorical_cols:
-            for col in categorical_cols:
-                if col in df.columns:
-                    try:
-                        df[col] = df[col].astype("category")
-                    except Exception:
-                        pass
-
-        elapsed = round(time.time() - t0, 2)
-        mem_mb = round(df.memory_usage(deep=True).sum() / 1024**2, 1)
-        _CACHE[table] = {
-            "df": df,
-            "ts": time.time(),
-            "load_time": elapsed,
-            "mem_mb": mem_mb,
-            "rows": len(df),
-            "cols": len(df.columns),
-        }
-        print(f"[DB] {table}: {len(df):,} linhas | {mem_mb} MB | carregado em {elapsed}s")
-        return df
-
-    except Exception as e:
-        print(f"[DB] ERRO ao carregar {table}: {e}")
-        return pd.DataFrame()
 
 def preload_tables(tables=None):
     """
@@ -142,11 +122,11 @@ def cache_info():
 
 def clear_cache(table=None):
     """Limpa cache de uma tabela ou de tudo."""
-    global _CACHE
-    if table:
-        _CACHE.pop(table, None)
-    else:
-        _CACHE.clear()
+    with _LOCK:
+        if table:
+            _CACHE.pop(table, None)
+        else:
+            _CACHE.clear()
 
 # ---------- QUEBRA TOTAL ----------
 COLS_QUEBRA_TOTAL = [
@@ -156,3 +136,4 @@ COLS_QUEBRA_TOTAL = [
     "NM_QUEBRA_RESPONSAVEL", "NM_QUEBRA_CENARIO",
     "PARCEIRA", "PARCEIRA_NOME",
 ]
+

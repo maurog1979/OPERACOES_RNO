@@ -1,35 +1,40 @@
 """Flask app factory do Portal Operações RNO."""
-from flask import Flask, render_template, abort, redirect, url_for
+from flask import Flask, render_template, abort, redirect, url_for, jsonify, request
 from config import Config
 from data.areas import AREAS, get_area, get_setor
 from areas.adm.desconexao.dash_safra_v8 import bp as dash_safra_bp
 
-
-def create_app():
+def create_app(test_config=None):
     app = Flask(__name__)
     app.config.from_object(Config)
+    if test_config:
+        app.config.update(test_config)
+
+    from data.db import DatabaseUnavailable
+
+    @app.errorhandler(DatabaseUnavailable)
+    def database_unavailable(error):
+        app.logger.error("Falha de acesso aos dados", exc_info=True)
+        return jsonify(ok=False, error="Dados temporariamente indisponíveis.",
+                       message="Dados temporariamente indisponíveis."), 503
+
+    @app.before_request
+    def protect_diagnostics():
+        if request.path.endswith("/api/debug") and not app.config["ENABLE_DIAGNOSTICS"]:
+            abort(404)
 
     # Registrar Blueprints do setor Desconexão (ADM)
-    try:
-        from areas.adm.desconexao import dash_executivo_bp
-        app.register_blueprint(dash_executivo_bp)
-        print("[APP] Blueprint dash_executivo registrado em /dash/executivo/")
-    except Exception as e:
-        print(f"[APP] AVISO: não foi possível registrar dash_executivo_bp: {e}")
+    from areas.adm.desconexao import dash_executivo_bp
+    app.register_blueprint(dash_executivo_bp)
+    print("[APP] Blueprint dash_executivo registrado em /dash/executivo/")
 
-    try:
-        from areas.adm.desconexao import dash_log_bp
-        app.register_blueprint(dash_log_bp)
-        print("[APP] Blueprint dash_log registrado em /dash/log/")
-    except Exception as e:
-        print(f"[APP] AVISO: não foi possível registrar dash_log_bp: {e}")
+    from areas.adm.desconexao import dash_log_bp
+    app.register_blueprint(dash_log_bp)
+    print("[APP] Blueprint dash_log registrado em /dash/log/")
 
-    try:
-        from areas.adm.desconexao import dash_parceiras_bp
-        app.register_blueprint(dash_parceiras_bp)
-        print("[APP] Blueprint dash_parceiras registrado em /dash/parceiras/")
-    except Exception as e:
-        print(f"[APP] AVISO: nao foi possivel registrar dash_parceiras_bp: {e}")
+    from areas.adm.desconexao import dash_parceiras_bp
+    app.register_blueprint(dash_parceiras_bp)
+    print("[APP] Blueprint dash_parceiras registrado em /dash/parceiras/")
 
     @app.context_processor
     def inject_globals():
@@ -94,76 +99,44 @@ def create_app():
     @app.route("/area/<area_slug>/em-construcao")
     def em_construcao(area_slug):
         area = get_area(area_slug)
-        nome = area["nome"] if area else area_slug.upper()
+        if area is None:
+            abort(404)
+        nome = area["nome"]
         return render_template("construcao.html", area_nome=nome)
 
     @app.errorhandler(404)
     def not_found(e):
-        return render_template("construcao.html", area_nome="Página não encontrada"), 404
+        return render_template("construcao.html", area_nome="Página não encontrada",
+                               mensagem_custom="O endereço informado não existe."), 404
 
     # ----- dash_backlog (FASE 2B - 3/4) -----
 
-    try:
+    from areas.adm.desconexao import dash_backlog_bp
 
-        from areas.adm.desconexao import dash_backlog_bp
+    app.register_blueprint(dash_backlog_bp)
 
-        app.register_blueprint(dash_backlog_bp)
-
-        print("[APP] Blueprint dash_backlog registrado em /dash/backlog/")
-
-    except Exception as e:
-
-        print(f"[APP] AVISO: nao foi possivel registrar dash_backlog_bp: {e}")
-
-
-
+    print("[APP] Blueprint dash_backlog registrado em /dash/backlog/")
 
     # ----- dash_quebra (FASE 2B - 4/4) -----
-    try:
-        from areas.adm.desconexao import bp_quebra
-        app.register_blueprint(bp_quebra)
-        print("[APP] Blueprint dash_quebra registrado em /dash/quebra/")
-    except Exception as e:
-        print(f"[APP] AVISO: nao foi possivel registrar bp_quebra: {e}")
+    from areas.adm.desconexao import bp_quebra
+    app.register_blueprint(bp_quebra)
+    print("[APP] Blueprint dash_quebra registrado em /dash/quebra/")
 
     # ===== Pre-carregamento de dados no startup (N2) =====
 
+    from data.db import preload_tables
 
-
-    try:
-
-
-
-        from data.db import preload_tables
-
-
-
+    if app.config["PRELOAD_DATA"] and not app.testing:
         preload_tables(["safra_enriquecida"])
 
+    from routes.dash_retirada import dash_retirada_bp
+    app.register_blueprint(dash_retirada_bp)
+    print("[APP] Blueprint dash_retirada registrado em /dash/retirada/")
 
-
-    except Exception as e:
-
-
-
-        print(f"[APP] AVISO: pre-carregamento falhou: {e}")
-
-
-
-
-    try:
-        from routes.dash_retirada import dash_retirada_bp
-        app.register_blueprint(dash_retirada_bp)
-        print("[APP] Blueprint dash_retirada registrado em /dash/retirada/")
-    except Exception as e:
-        print(f"[APP] AVISO: nao foi possivel registrar dash_retirada_bp: {e}")
-
-    try:
-        from routes.compat_redirects import compat_redirects_bp
-        app.register_blueprint(compat_redirects_bp)
-        print("[APP] Blueprint compat_redirects registrado")
-    except Exception as e:
-        print(f"[APP] AVISO: nao foi possivel registrar compat_redirects_bp: {e}")
+    from routes.compat_redirects import compat_redirects_bp
+    app.register_blueprint(compat_redirects_bp)
+    print("[APP] Blueprint compat_redirects registrado")
 
     app.register_blueprint(dash_safra_bp)
     return app
+

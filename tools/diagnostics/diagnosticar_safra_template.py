@@ -1,7 +1,7 @@
 from pathlib import Path
 
 base = Path(
-    r"areas\adm\desconexao\templates"
+    Path(__file__).resolve().parents[2] / "areas/adm/desconexao/templates"
 )
 
 print("\nARQUIVOS HTML ENCONTRADOS:\n")

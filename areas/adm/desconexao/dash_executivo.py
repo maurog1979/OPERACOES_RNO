@@ -12,6 +12,7 @@ FIX 3:
 ============================================================
 """
 import json
+from data.plotly_json import figure_json
 import re
 import traceback
 
@@ -53,7 +54,7 @@ def find_col(df, keyword, exclude=None):
 def find_status_order(df):
     if "STATUS_OPERACIONAL" not in df.columns:
         return [], {}
-    vals = df["STATUS_OPERACIONAL"].dropna().unique().tolist()
+    vals = df["STATUS_OPERACIONAL"].astype("string").fillna("SEM INFO").unique().tolist()
     color_map, order = {}, []
     keywords = [
         ("EM ANDAMENTO", "#2ECC71"),
@@ -85,7 +86,7 @@ def prepare_df(df):
     print("[EXECUTIVO] Coluna PENDENCIA encontrada: {!r}".format(col_pend))
     if col_pend:
         df["_RECUP"] = (
-            df[col_pend].fillna("1").astype(str).str.strip().eq("0").astype(int)
+            df[col_pend].astype("string").fillna("1").str.strip().str.upper().isin(["0", "0.0", "RECUPERADO"]).astype(int)
         )
     else:
         print("[EXECUTIVO] AVISO: Coluna PENDENCIA nao encontrada! Usando 0.")
@@ -116,8 +117,6 @@ def get_df():
         return df
     if "_RECUP" not in df.columns:
         df = prepare_df(df.copy())
-        from data.db import _DF_CACHE
-        _DF_CACHE["safra_final"] = df
         for col in CATEGORICAL_COLS:
             if col in df.columns and df[col].dtype.name != "category":
                 df[col] = df[col].astype("category")
@@ -171,7 +170,10 @@ bp = Blueprint(
 
 @bp.route("/")
 def index():
-    opts = get_options()
+    try:
+        opts = get_options()
+    except Exception:
+        opts = {"safras": [], "tipos": [], "cidades": [], "statuses": []}
     return render_template("dash_executivo.html", opts=opts)
 
 
@@ -185,7 +187,7 @@ def api_options():
         return jsonify(opts)
     except Exception as e:
         traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Não foi possível carregar os dados."}), 500
 
 
 @bp.route("/api/data")
@@ -371,7 +373,7 @@ def api_data():
         # FIG 5: Status Operacional
         if "STATUS_OPERACIONAL" in dff.columns and total > 0:
             st_grp_raw = (
-                dff["STATUS_OPERACIONAL"].fillna("SEM INFO").value_counts()
+                dff["STATUS_OPERACIONAL"].astype("string").fillna("SEM INFO").value_counts()
             )
             if status_ordem:
                 st_grp_raw = st_grp_raw.reindex(status_ordem).fillna(0)
@@ -439,16 +441,17 @@ def api_data():
                 "taxa": round(taxa, 1),
             },
             "figs": {
-                "fig1": json.loads(fig1.to_json()),
-                "fig2": json.loads(fig2.to_json()),
-                "fig3": json.loads(fig3.to_json()),
-                "fig4": json.loads(fig4.to_json()),
-                "fig5": json.loads(fig5.to_json()),
-                "fig6": json.loads(fig6.to_json()),
+                "fig1": figure_json(fig1),
+                "fig2": figure_json(fig2),
+                "fig3": figure_json(fig3),
+                "fig4": figure_json(fig4),
+                "fig5": figure_json(fig5),
+                "fig6": figure_json(fig6),
             },
         })
 
     except Exception as e:
         print("[EXECUTIVO ERRO] {}".format(e))
         traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Não foi possível carregar os dados."}), 500
+
