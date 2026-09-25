@@ -3,9 +3,11 @@
 dash_backlog.py v2 — KPIs reais + FX_TEMPO derivada de BKL_TEMPO_ABERTURA_DIAS
 """
 import json
+from data.plotly_json import figure_json
 import time
 import traceback
 import pandas as pd
+from data.dates import parse_dates
 import plotly.express as px
 import plotly.io as pio
 from flask import Blueprint, render_template, request, jsonify
@@ -48,12 +50,10 @@ FAIXA_ORDEM = ["0-7d","8-15d","16-30d","31-60d","61-90d","90d+"]
 FAIXA_CORES = ["#2E7D32","#4CAF50","#F9A825","#F57C00","#E60000","#B71C1C"]
 
 def get_df():
-    if _DF_CACHE["df"] is not None:
-        return _DF_CACHE["df"]
     try:
         df = load_table("safra_enriquecida", categorical_cols=CATEGORICAL_COLS).copy()
         if "BKL_DATA_AGENDAMENTO" in df.columns:
-            df["BKL_DATA_AGENDAMENTO"] = pd.to_datetime(df["BKL_DATA_AGENDAMENTO"], errors="coerce")
+            df["BKL_DATA_AGENDAMENTO"] = parse_dates(df["BKL_DATA_AGENDAMENTO"])
             df["ANO"] = df["BKL_DATA_AGENDAMENTO"].dt.year.astype("Int64")
             df["MES"] = df["BKL_DATA_AGENDAMENTO"].dt.month.astype("Int64")
             df["DIA"] = df["BKL_DATA_AGENDAMENTO"].dt.day.astype("Int64")
@@ -79,7 +79,7 @@ def get_df():
                 "max": float(s.max()) if nao_nulos else None,
                 "media": round(float(s.mean()), 2) if nao_nulos else None,
             }
-            if nao_nulos > 100 and aging_col_usada is None:
+            if nao_nulos > 0 and aging_col_usada is None:
                 aging_col_usada = col
                 df["_AGING_NUM"] = s
                 df["FAIXA_AGING"] = s.apply(_derivar_faixa)
@@ -97,9 +97,9 @@ def get_df():
         print(f"[BACKLOG v3] {len(df):,} linhas | {_DF_CACHE['diag']['mem_mb']} MB | aging_col={aging_col_usada}")
         return df
     except Exception as e:
-        _DF_CACHE["diag"] = {"error": str(e), "traceback": traceback.format_exc()}
+        _DF_CACHE["diag"] = {"error": "Não foi possível carregar os dados.", "traceback": "Consulte o log do servidor."}
         print(f"[BACKLOG] ERRO: {e}")
-        return pd.DataFrame()
+        raise
 
 def parse_multi(v):
     if not v: return []
@@ -113,7 +113,7 @@ def safe_unique(s):
         except: return sorted(vals)
     except: return []
 
-def fig_to_json(fig): return json.loads(pio.to_json(fig))
+def fig_to_json(fig): return figure_json(fig)
 
 def estilo(fig, titulo="", h=350):
     fig.update_layout(
@@ -163,7 +163,7 @@ def api_debug():
                     info[f"{c.lower()}_counts"] = s.value_counts().head(10).to_dict()
         return jsonify(info)
     except Exception as e:
-        return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
+        return jsonify({"error": "Não foi possível carregar os dados.", "traceback": "Consulte o log do servidor."}), 500
 
 @bp.route("/api/refresh")
 def api_refresh():
@@ -178,23 +178,23 @@ def api_refresh():
         opts = {}
 
         opts["ANO"] = safe_unique(df_full["ANO"]) if "ANO" in df_full.columns else []
-        if f["ANO"]: df = df[df["ANO"].astype(str).isin(f["ANO"])]
+        if f["ANO"] and "ANO" in df.columns: df = df[df["ANO"].astype(str).isin(f["ANO"])]
         opts["MES"] = safe_unique(df["MES"]) if "MES" in df.columns else []
-        if f["MES"]: df = df[df["MES"].astype(str).isin(f["MES"])]
+        if f["MES"] and "MES" in df.columns: df = df[df["MES"].astype(str).isin(f["MES"])]
         opts["DIA"] = safe_unique(df["DIA"]) if "DIA" in df.columns else []
-        if f["DIA"]: df = df[df["DIA"].astype(str).isin(f["DIA"])]
+        if f["DIA"] and "DIA" in df.columns: df = df[df["DIA"].astype(str).isin(f["DIA"])]
         opts["UF"] = safe_unique(df_full["UF"]) if "UF" in df_full.columns else []
-        if f["UF"]: df = df[df["UF"].astype(str).isin(f["UF"])]
+        if f["UF"] and "UF" in df.columns: df = df[df["UF"].astype(str).isin(f["UF"])]
         opts["NM_CIDADE"] = safe_unique(df["NM_CIDADE"]) if "NM_CIDADE" in df.columns else []
-        if f["NM_CIDADE"]: df = df[df["NM_CIDADE"].astype(str).isin(f["NM_CIDADE"])]
+        if f["NM_CIDADE"] and "NM_CIDADE" in df.columns: df = df[df["NM_CIDADE"].astype(str).isin(f["NM_CIDADE"])]
         opts["PARCEIRA_NOME"] = safe_unique(df_full["PARCEIRA_NOME"]) if "PARCEIRA_NOME" in df_full.columns else []
-        if f["PARCEIRA_NOME"]: df = df[df["PARCEIRA_NOME"].astype(str).isin(f["PARCEIRA_NOME"])]
+        if f["PARCEIRA_NOME"] and "PARCEIRA_NOME" in df.columns: df = df[df["PARCEIRA_NOME"].astype(str).isin(f["PARCEIRA_NOME"])]
         opts["SAFRA"] = safe_unique(df_full["SAFRA"]) if "SAFRA" in df_full.columns else []
-        if f["SAFRA"]: df = df[df["SAFRA"].astype(str).isin(f["SAFRA"])]
+        if f["SAFRA"] and "SAFRA" in df.columns: df = df[df["SAFRA"].astype(str).isin(f["SAFRA"])]
         opts["DS_TIPO_DESCONEXAO"] = safe_unique(df_full["DS_TIPO_DESCONEXAO"]) if "DS_TIPO_DESCONEXAO" in df_full.columns else []
-        if f["DS_TIPO_DESCONEXAO"]: df = df[df["DS_TIPO_DESCONEXAO"].astype(str).isin(f["DS_TIPO_DESCONEXAO"])]
+        if f["DS_TIPO_DESCONEXAO"] and "DS_TIPO_DESCONEXAO" in df.columns: df = df[df["DS_TIPO_DESCONEXAO"].astype(str).isin(f["DS_TIPO_DESCONEXAO"])]
         opts["PENDENCIA"] = safe_unique(df_full["PENDENCIA"]) if "PENDENCIA" in df_full.columns else []
-        if f["PENDENCIA"]: df = df[df["PENDENCIA"].astype(str).isin(f["PENDENCIA"])]
+        if f["PENDENCIA"] and "PENDENCIA" in df.columns: df = df[df["PENDENCIA"].astype(str).isin(f["PENDENCIA"])]
 
         # ===== KPIs (valores REAIS) =====
         def cnt(col, val):
@@ -344,4 +344,5 @@ def api_refresh():
         return jsonify({"empty": False, "total": len(df),
                         "options": opts, "kpis": kpis, "figs": figs})
     except Exception as e:
-        return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
+        return jsonify({"error": "Não foi possível carregar os dados.", "traceback": "Consulte o log do servidor."}), 500
+

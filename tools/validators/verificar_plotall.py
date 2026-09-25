@@ -1,7 +1,7 @@
 from pathlib import Path
 
 ARQ = Path(
-    r"areas\adm\desconexao\templates\dash_safra.html"
+    Path(__file__).resolve().parents[2] / "areas/adm/desconexao/templates/dash_safra_v9_visual.html"
 )
 
 txt = ARQ.read_text(

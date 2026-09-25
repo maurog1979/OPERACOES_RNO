@@ -3,6 +3,7 @@
 dash_parceiras.py v4 - cache-safe + UF idempotente
 """
 import json
+from data.plotly_json import figure_json
 import traceback
 import pandas as pd
 import plotly.express as px
@@ -37,23 +38,23 @@ _DF_CACHE = {"df": None, "diag": {}}  # forcado reload v6
 
 
 def get_engine():
-    return create_engine(Config.db_url())
+    from data.db import get_engine as shared_engine
+    return shared_engine()
 
 
 def _load_cidades_uf_sql():
+    eng = get_engine()
     try:
-        eng = get_engine()
         df = pd.read_sql(text("SELECT CIDADE, UF FROM cidades_uf"), eng)
-        eng.dispose()
         return df
     except Exception as e:
         print(f"[PARCEIRAS] SQL direto cidades_uf falhou: {e}")
         return pd.DataFrame(columns=["CIDADE", "UF"])
+    finally:
+        eng.dispose()
 
 
 def get_df():
-    if _DF_CACHE["df"] is not None:
-        return _DF_CACHE["df"]
 
     diag = {}
     try:
@@ -72,7 +73,7 @@ def get_df():
         # Se ja tem UF (do v2 anterior cacheado), nao mexe
         if "UF" in df.columns:
             print("[PARCEIRAS] UF ja presente em safra_enriquecida - reutilizando.")
-            df["UF"] = df["UF"].fillna("DESCONHECIDO").astype(str)
+            df["UF"] = df["UF"].astype("string").fillna("DESCONHECIDO").astype(str)
             diag["uf_source"] = "ja_existia"
         else:
             cid = _load_cidades_uf_sql()
@@ -94,7 +95,7 @@ def get_df():
 
                 df = df.merge(cid, how="left", on="_KEY_CID")
                 df = df.drop(columns=["_KEY_CID"])
-                df["UF"] = df["UF"].fillna("DESCONHECIDO").astype(str)
+                df["UF"] = df["UF"].astype("string").fillna("DESCONHECIDO").astype(str)
                 diag["uf_source"] = "merge_ok"
             else:
                 df["UF"] = "DESCONHECIDO"
@@ -111,8 +112,8 @@ def get_df():
     except Exception as e:
         tb = traceback.format_exc()
         print(f"[PARCEIRAS] ERRO em get_df:\n{tb}")
-        _DF_CACHE["diag"] = {"error": str(e), "traceback": tb}
-        return pd.DataFrame()
+        _DF_CACHE["diag"] = {"error": "Não foi possível carregar os dados.", "traceback": "Consulte o log do servidor."}
+        raise
 
 
 def parse_multi(val):
@@ -135,7 +136,7 @@ def estilo(fig, titulo="", height=350):
 
 
 def fig_to_json(fig):
-    return json.loads(pio.to_json(fig))
+    return figure_json(fig)
 
 
 def safe_unique(series):
@@ -169,7 +170,7 @@ def api_debug():
                                              (s.str.lower() == "none")).sum())
         return jsonify(info)
     except Exception as e:
-        return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
+        return jsonify({"error": "Não foi possível carregar os dados.", "traceback": "Consulte o log do servidor."}), 500
 
 
 @bp.route("/api/refresh")
@@ -224,9 +225,9 @@ def api_refresh():
 
         # G1
         if not df_p.empty and "PENDENCIA" in df_p.columns:
-            d1t = df_p.groupby("PARCEIRA_NOME", observed=False).size().reset_index(name="TOT")
+            d1t = df_p.groupby("PARCEIRA_NOME", observed=True).size().reset_index(name="TOT")
             d1r = df_p[df_p["PENDENCIA"].astype(str) == "RECUPERADO"] \
-                    .groupby("PARCEIRA_NOME", observed=False).size().reset_index(name="REC")
+                    .groupby("PARCEIRA_NOME", observed=True).size().reset_index(name="REC")
             d1 = d1t.merge(d1r, on="PARCEIRA_NOME", how="left").fillna(0)
             d1["PCT"] = (d1["REC"] / d1["TOT"] * 100).round(1)
             d1 = d1.sort_values("PCT", ascending=True)
@@ -241,7 +242,7 @@ def api_refresh():
 
         # G2
         if not df_p.empty:
-            d2 = df_p.groupby("PARCEIRA_NOME", observed=False).size().reset_index(name="QTD")
+            d2 = df_p.groupby("PARCEIRA_NOME", observed=True).size().reset_index(name="QTD")
             d2 = d2.sort_values("QTD", ascending=True)
             fig = px.bar(d2, x="QTD", y="PARCEIRA_NOME", orientation="h",
                          color_discrete_sequence=[CORES["blue"]])
@@ -253,8 +254,8 @@ def api_refresh():
         # G3
         if not df_p.empty and "SAFRA" in df_p.columns and "PENDENCIA" in df_p.columns:
             d3r = df_p[df_p["PENDENCIA"].astype(str) == "RECUPERADO"] \
-                    .groupby(["PARCEIRA_NOME", "SAFRA"], observed=False).size().reset_index(name="REC")
-            d3t = df_p.groupby(["PARCEIRA_NOME", "SAFRA"], observed=False).size().reset_index(name="TOT")
+                    .groupby(["PARCEIRA_NOME", "SAFRA"], observed=True).size().reset_index(name="REC")
+            d3t = df_p.groupby(["PARCEIRA_NOME", "SAFRA"], observed=True).size().reset_index(name="TOT")
             d3 = d3t.merge(d3r, on=["PARCEIRA_NOME", "SAFRA"], how="left").fillna(0)
             d3["PCT"] = (d3["REC"] / d3["TOT"] * 100).round(1)
             fig = px.bar(d3, x="PARCEIRA_NOME", y="PCT", color="SAFRA",
@@ -269,8 +270,8 @@ def api_refresh():
         # G4
         if not df_p.empty and "DS_TIPO_DESCONEXAO" in df_p.columns and "PENDENCIA" in df_p.columns:
             d4r = df_p[df_p["PENDENCIA"].astype(str) == "RECUPERADO"] \
-                    .groupby(["PARCEIRA_NOME", "DS_TIPO_DESCONEXAO"], observed=False).size().reset_index(name="REC")
-            d4t = df_p.groupby(["PARCEIRA_NOME", "DS_TIPO_DESCONEXAO"], observed=False).size().reset_index(name="TOT")
+                    .groupby(["PARCEIRA_NOME", "DS_TIPO_DESCONEXAO"], observed=True).size().reset_index(name="REC")
+            d4t = df_p.groupby(["PARCEIRA_NOME", "DS_TIPO_DESCONEXAO"], observed=True).size().reset_index(name="TOT")
             d4 = d4t.merge(d4r, on=["PARCEIRA_NOME", "DS_TIPO_DESCONEXAO"], how="left").fillna(0)
             d4["PCT"] = (d4["REC"] / d4["TOT"] * 100).round(1)
             cm4 = {v: (CORES["blue"] if "OP" in str(v).upper() else CORES["orange"])
@@ -287,7 +288,7 @@ def api_refresh():
         if not df_p.empty and "PENDENCIA" in df_p.columns:
             d5src = df_p[df_p["PENDENCIA"].astype(str) == "PENDENTE"]
             if not d5src.empty:
-                d5 = d5src.groupby("PARCEIRA_NOME", observed=False).size().reset_index(name="QTD")
+                d5 = d5src.groupby("PARCEIRA_NOME", observed=True).size().reset_index(name="QTD")
                 d5 = d5.sort_values("QTD", ascending=True)
                 fig = px.bar(d5, x="QTD", y="PARCEIRA_NOME", orientation="h",
                              color_discrete_sequence=[CORES["red"]])
@@ -318,5 +319,6 @@ def api_refresh():
     except Exception as e:
         tb = traceback.format_exc()
         print(f"[PARCEIRAS] ERRO em api_refresh:\n{tb}")
-        return jsonify({"empty": True, "error": str(e), "traceback": tb,
+        return jsonify({"empty": True, "error": "Não foi possível carregar os dados.", "traceback": "Consulte o log do servidor.",
                         "options": {f: [] for f in FILTER_FIELDS}}), 500
+

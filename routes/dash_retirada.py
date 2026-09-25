@@ -18,9 +18,12 @@ from flask import Blueprint, render_template, jsonify, request, current_app, red
 from sqlalchemy import create_engine, text
 from config import Config
 import pandas as pd
+from data.dates import parse_dates
 import numpy as np
 import unicodedata
 import traceback
+import time
+from data.db import get_engine, cache_fresh, DatabaseUnavailable
 
 
 try:
@@ -40,6 +43,7 @@ DB = Config.db_url()
 
 _DF_CACHE = None
 _COLUMNS_CACHE = None
+_CACHE_CLOCK = None
 
 
 STATUS_PERFORMANCE = {
@@ -101,28 +105,18 @@ def safe_login_required(func):
     """
     @wraps(func)
     def wrapper(*args, **kwargs):
-        try:
-            has_login_manager = hasattr(current_app, "login_manager")
-
-            if not has_login_manager:
-                return func(*args, **kwargs)
-
-            if current_user is None:
-                return func(*args, **kwargs)
-
-            if getattr(current_user, "is_authenticated", False):
-                return func(*args, **kwargs)
-
-            return redirect("/login")
-
-        except AttributeError:
+        manager = getattr(current_app, "login_manager", None)
+        if manager is None:
             return func(*args, **kwargs)
+        if current_user is None or not getattr(current_user, "is_authenticated", False):
+            return manager.unauthorized()
+        return func(*args, **kwargs)
 
     return wrapper
 
 
 def _engine():
-    return create_engine(DB, pool_pre_ping=True)
+    return get_engine()
 
 
 def _norm_text(value):
@@ -191,10 +185,9 @@ def _build_select_sql():
     if not select_parts:
         raise RuntimeError("Nenhuma coluna esperada encontrada em safra_enriquecida.")
 
-    where_clause = ""
-
-    if resolved.get("TEM_TOA"):
-        where_clause = "WHERE `TEM_TOA` = 'SIM'"
+    if not resolved.get("TEM_TOA"):
+        raise RuntimeError("Coluna TEM_TOA necessária para definir o universo de retirada.")
+    where_clause = "WHERE `TEM_TOA` = 'SIM'"
 
     sql = f"""
         SELECT
@@ -207,11 +200,12 @@ def _build_select_sql():
 
 
 def carregar_dados(force=False):
-    global _DF_CACHE
+    global _DF_CACHE, _COLUMNS_CACHE, _CACHE_CLOCK
 
-    if _DF_CACHE is not None and not force:
+    if _DF_CACHE is not None and not force and cache_fresh(_CACHE_CLOCK):
         return _DF_CACHE
 
+    _COLUMNS_CACHE = None
     print("[RETIRADA] Carregando dados em memória...")
 
     engine = _engine()
@@ -249,11 +243,7 @@ def carregar_dados(force=False):
             if col in df.columns:
                 df[col] = df[col].apply(_norm_text)
 
-        df["TOA_ULT_DATA_DT"] = pd.to_datetime(
-            df["TOA_ULT_DATA"],
-            errors="coerce",
-            dayfirst=True
-        )
+        df["TOA_ULT_DATA_DT"] = parse_dates(df["TOA_ULT_DATA"])
 
         df["ANO"] = df["TOA_ULT_DATA_DT"].dt.year.astype("Int64")
         df["MES"] = df["TOA_ULT_DATA_DT"].dt.month.astype("Int64")
@@ -291,6 +281,7 @@ def carregar_dados(force=False):
                     pass
 
         _DF_CACHE = df
+        _CACHE_CLOCK = time.monotonic()
 
         mem = df.memory_usage(deep=True).sum() / 1024**2
         print(f"[RETIRADA] Cache carregado: {len(df):,} linhas | {mem:.1f} MB")
@@ -301,7 +292,7 @@ def carregar_dados(force=False):
         print("[RETIRADA] Erro ao carregar dados:")
         print(exc)
         traceback.print_exc()
-        return pd.DataFrame()
+        raise DatabaseUnavailable("Dados temporariamente indisponíveis.") from exc
 
     finally:
         engine.dispose()
@@ -728,3 +719,4 @@ def api_reload():
 
 def warmup_dash_retirada():
     carregar_dados(force=True)
+

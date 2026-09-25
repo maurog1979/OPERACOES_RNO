@@ -17,7 +17,7 @@ AREAS = [
                 "icone": "fa-plug-circle-xmark",
                 "cor": "red",
                 "ativo": True,
-                "meta": "6 dashboards",
+                "meta": "7 dashboards",
             },
             {
                 "slug": "seguranca",
@@ -117,3 +117,4 @@ def get_setor(area, slug):
         if s["slug"] == slug:
             return s
     return None
+
