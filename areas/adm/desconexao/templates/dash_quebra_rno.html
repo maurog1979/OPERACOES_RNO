@@ -1,758 +1,652 @@
 {% extends "base.html" %}
-{% block title %}Quebra de Agenda{% endblock %}
+{% block title %}Quebra de Agenda RNO{% endblock %}
 {% block content %}
-
 <!--
 =====================================================================
 PORTAL OPERACOES RNO
 areas/adm/desconexao/templates/dash_quebra_rno.html
-Quebra de Agenda - os contratos da Safra na lente da quebra
+Quebra de Agenda RNO - identidade "PULSE" - NOTEBOOK FIRST
 =====================================================================
-PADRAO VISUAL
-  Segue o dash_quebra existente:
-    cantos arredondados de 18 a 22px
-    sombras suaves
-    botoes em pill (border-radius 999px)
-    hero com eyebrow, titulo e subtitulo
-    tres modos: Quantidade, Taxa, Representatividade
-    atalhos de teclado Q, T, R
-    Choices.js com tags vermelhas
-    overlay de loading com backdrop-filter
+PADRAO DE TELA (obrigatorio)
+  Notebook corporativo 1920x1080 com escala 150%
+  = viewport efetivo ~1280 x 720 px CSS
+  Area util apos sidebar do portal ~1000 a 1050 px
 
-CONCEITO
-  A base e a SAFRA. A Quebra e a lente.
-  Os KPIs deixam explicito o universo analisado.
+IDENTIDADE PULSE
+  tinta #0B1220 | papel #F4F2EC | ciano #22C7B8
+  coral #FF3B5C | ambar #F2A33A | ardosia #3A4A66
 
-ONDE SALVAR
-  areas\adm\desconexao\templates\dash_quebra_rno.html
+SERIAL INCOMPLETO NA ORIGEM (nesta versao)
+  O CSV da Safra traz parte dos seriais em notacao cientifica
+  (8,32E+14). Os digitos finais nao existem no arquivo.
+  O banco NAO e alterado: NR_SERIAL continua como veio da origem.
+  Apenas a EXIBICAO mostra os digitos reais + tamanho original:
+      8,32E+14    ->  832… (15 díg.)
+      5,34E+11    ->  534… (12 díg.)
+      1,43E+19    ->  143… (20 díg.)
+      8,3218E+14  ->  83218… (15 díg.)
+  Tamanho = digitos da parte inteira + expoente.
+  O tooltip mostra o valor original e avisa que o ultimo digito
+  pode ter sido arredondado pelo Excel.
+
+FUNCIONAL PRESERVADO
+  /api/refresh base unica (cache TTL) | modo local Q/T/R
+  cascata de filtros | /api/consulta | atalho C para contrato
 =====================================================================
 -->
 
-
-
-
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js@10.2.0/public/assets/styles/choices.min.css">
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/choices.js@10.2.0/public/assets/scripts/choices.min.js"></script>
 
 <style>
-/* ================================================================
-   QUEBRA RNO | SIGNAL CONTROL 2026
-   Linguagem visual exclusiva: command center editorial, alto contraste,
-   tipografia forte, sinalizacao operacional e leitura executiva.
-   ================================================================ */
-:root{
-  --signal:#ff2340;
-  --signal-2:#ff5b6f;
-  --ink:#111827;
-  --ink-2:#172033;
-  --ink-3:#23324a;
-  --paper:#f4f1eb;
-  --surface:#ffffff;
-  --surface-2:#f8fafc;
-  --line:#d7dde7;
-  --muted:#596579;
-  --cyan:#00a6a6;
-  --electric:#2658d9;
-  --amber:#d8890b;
-  --violet:#6d4aff;
-  --green:#167c5a;
-  --shadow:0 18px 42px rgba(17,24,39,.10);
+.pq{
+  --ink:#0B1220; --ink2:#141E33; --ink3:#22304D;
+  --paper:#F4F2EC; --card:#FFFFFF; --line:#DDD8CC;
+  --cyan:#22C7B8; --cyan-d:#0E8C82; --coral:#FF3B5C; --amber:#F2A33A;
+  --slate:#3A4A66; --violet:#7B61FF; --green:#1F9D6B;
+  --txt:#141B2B; --mut:#5C6577;
+  font-family:"Segoe UI",system-ui,Arial,sans-serif;
+  color:var(--txt); font-size:13px;
+  max-width:1280px; margin:0 auto; padding:10px 6px 28px;
 }
+.pq *{box-sizing:border-box}
 
-.q-wrap{
-  width:min(1780px,calc(100vw - 34px));
-  margin:0 auto;
-  padding:18px 0 44px;
-  color:var(--ink);
-  position:relative;
+/* ---------- FAIXA DE COMANDO (KPIs) ---------- */
+.pq-cmd{
+  background:var(--ink); border-radius:12px; padding:12px 14px;
+  display:grid; grid-template-columns:repeat(5,1fr); gap:10px;
+  position:relative; overflow:hidden; margin-bottom:10px;
 }
-.q-wrap:before{
-  content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
-  background:
-    linear-gradient(rgba(17,24,39,.025) 1px,transparent 1px),
-    linear-gradient(90deg,rgba(17,24,39,.025) 1px,transparent 1px),
-    linear-gradient(135deg,#f7f5f0 0%,#eef2f7 55%,#f5f1eb 100%);
-  background-size:32px 32px,32px 32px,100% 100%;
-}
+.pq-cmd:before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.5;
+  background:radial-gradient(circle at 92% 0%,rgba(34,199,184,.22),transparent 40%),
+             radial-gradient(circle at 0% 100%,rgba(255,59,92,.16),transparent 35%)}
+.pq-k{position:relative;padding:6px 10px 4px;border-left:3px solid var(--ink3)}
+.pq-k .l{color:#8FA0BC;font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}
+.pq-k .v{color:#fff;font-size:26px;font-weight:900;letter-spacing:-.03em;line-height:1.15;margin-top:2px}
+.pq-k .s{color:#A9B5C9;font-size:11px;font-weight:600}
+.pq-k.coral{border-left-color:var(--coral)} .pq-k.coral .v{color:#FF6B84}
+.pq-k.amber{border-left-color:var(--amber)} .pq-k.amber .v{color:#FFC067}
+.pq-k.cyan{border-left-color:var(--cyan)}   .pq-k.cyan .v{color:#5FE3D6}
+.pq-k.violet{border-left-color:var(--violet)} .pq-k.violet .v{color:#B3A4FF}
 
-/* TOPO */
-.q-topbar{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:12px}
-.q-breadcrumb{color:#4d5b70;font-size:11px;font-weight:900;letter-spacing:.18em;text-transform:uppercase}
-.q-breadcrumb:before{content:"LIVE  /";color:var(--signal);margin-right:8px}
-.q-actions{display:flex;gap:8px;align-items:center}
-.q-nav-btn{
-  border:1px solid #cdd4df;background:rgba(255,255,255,.88);color:var(--ink);
-  min-height:36px;padding:8px 14px;border-radius:7px;font-size:12px;font-weight:850;
-  text-decoration:none!important;display:inline-flex;align-items:center;gap:7px;cursor:pointer;
-  box-shadow:0 4px 12px rgba(17,24,39,.06);transition:.18s ease;
-}
-.q-nav-btn:hover{transform:translateY(-2px);color:var(--signal);border-color:var(--signal)}
-.q-nav-btn.primary{background:var(--signal);color:#fff;border-color:var(--signal);box-shadow:0 9px 20px rgba(255,35,64,.24)}
+/* ---------- UNIVERSO ---------- */
+.pq-uni{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;
+  font-size:12px;color:var(--mut);margin:0 2px 8px;font-weight:600}
+.pq-uni b{color:var(--txt);font-weight:900}
+.pq-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--cyan);
+  box-shadow:0 0 0 4px rgba(34,199,184,.18);margin-right:6px;vertical-align:1px}
+.pq-dot.busy{background:var(--amber);box-shadow:0 0 0 4px rgba(242,163,58,.2);animation:pq-blink 1s infinite}
+@keyframes pq-blink{50%{opacity:.35}}
+.pq-goto{border:1px solid var(--ink3);background:var(--ink);color:#fff;border-radius:7px;padding:5px 11px;
+  font-size:11px;font-weight:800;cursor:pointer;margin-left:8px}
+.pq-goto:hover{background:var(--ink3)}
 
-/* HERO COMMAND CENTER */
-.q-hero{
-  min-height:150px;overflow:hidden;position:relative;
-  background:
-    radial-gradient(circle at 82% 20%,rgba(0,166,166,.30),transparent 25%),
-    radial-gradient(circle at 95% 115%,rgba(109,74,255,.28),transparent 36%),
-    linear-gradient(116deg,#0e1625 0%,#172640 62%,#101827 100%);
-  border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:28px 30px;
-  box-shadow:0 22px 50px rgba(14,22,37,.23);margin-bottom:12px;
-  display:flex;justify-content:space-between;gap:18px;align-items:center;
-}
-.q-hero:before{
-  content:"";position:absolute;inset:0;pointer-events:none;opacity:.22;
-  background-image:linear-gradient(rgba(255,255,255,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.08) 1px,transparent 1px);
-  background-size:28px 28px;mask-image:linear-gradient(90deg,transparent 0%,#000 52%,#000 100%);
-}
-.q-hero:after{
-  content:"04";position:absolute;right:26px;bottom:-28px;color:rgba(255,255,255,.045);
-  font-size:150px;font-weight:950;line-height:1;letter-spacing:-.08em;
-}
-.q-titlebox{position:relative;z-index:1;padding-left:18px;border-left:6px solid var(--signal)}
-.q-eyebrow{color:#67e8e0;font-size:10px;font-weight:950;letter-spacing:.22em;text-transform:uppercase;margin-bottom:7px}
-.q-title{margin:0;color:#fff;font-size:clamp(34px,3vw,52px);font-weight:950;letter-spacing:-.055em;line-height:.98;text-transform:uppercase}
-.q-title:after{content:" / RNO";color:var(--signal);font-weight:950}
-.q-sub{margin:10px 0 0;color:#cbd5e1;font-size:14px;font-weight:650;line-height:1.45;max-width:780px}
-.q-status{
-  position:relative;z-index:2;color:#fff;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.1em;
-  background:rgba(8,15,27,.64);border:1px solid rgba(103,232,224,.35);border-radius:8px;padding:13px 16px;
-  box-shadow:inset 3px 0 0 #67e8e0;white-space:nowrap;backdrop-filter:blur(10px)
-}
-.q-status:before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:#67e8e0;box-shadow:0 0 0 5px rgba(103,232,224,.12);margin-right:10px}
+/* ---------- FILTROS ---------- */
+.pq-fil{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:10px}
+.pq-fil-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
+.pq-fil label{display:block;font-size:10px;font-weight:800;color:var(--ink3);
+  text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px}
+.pq-fil-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap}
+.pq-modes{display:inline-flex;background:#ECE8DE;border-radius:8px;padding:3px}
+.pq-modes button{border:0;background:transparent;padding:6px 12px;border-radius:6px;
+  font-size:11px;font-weight:800;letter-spacing:.04em;color:var(--slate);cursor:pointer}
+.pq-modes button.on{background:var(--ink);color:#fff;box-shadow:inset 0 -2px 0 var(--cyan)}
+.pq-hint{font-size:10.5px;color:var(--mut);font-weight:600}
+.pq-btn-l{border:1px solid var(--line);background:#fff;border-radius:7px;padding:5px 10px;
+  font-size:11px;font-weight:800;color:var(--slate);cursor:pointer}
+.pq-btn-l:hover{border-color:var(--coral);color:var(--coral)}
 
-/* UNIVERSO COMO DISPLAY OPERACIONAL */
-.q-universo{
-  background:linear-gradient(90deg,#fff 0%,#f8fafc 100%);color:var(--ink);border:1px solid #cfd7e3;
-  border-left:7px solid var(--cyan);border-radius:10px;padding:15px 20px;margin-bottom:12px;
-  display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;
-  font-size:13px;font-weight:800;box-shadow:0 8px 20px rgba(17,24,39,.06)
+.pq .choices{margin:0;font-size:12px}
+.pq .choices__inner{min-height:34px!important;padding:3px 6px 0!important;border-radius:7px!important;
+  border:1px solid #CFC9BB!important;background:#FBFAF7!important;font-size:12px!important}
+.pq .is-focused .choices__inner,.pq .is-open .choices__inner{border-color:var(--cyan)!important;
+  box-shadow:0 0 0 2px rgba(34,199,184,.18)!important;background:#fff!important}
+.pq .choices__list--multiple .choices__item{background:var(--ink3)!important;border:0!important;
+  border-radius:5px!important;font-size:10.5px!important;font-weight:700!important;padding:2px 6px!important;margin:2px 3px 2px 0!important}
+.pq .choices__list--dropdown .choices__item--selectable.is-highlighted{background:#E3F7F4!important;color:#0B5C55!important}
+.pq .choices__input{font-size:12px!important;background:transparent!important}
+
+/* ---------- GRAFICOS ---------- */
+.pq-sec{display:flex;align-items:center;gap:8px;margin:12px 2px 6px;
+  font-size:11px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:var(--ink3)}
+.pq-sec:after{content:"";flex:1;height:1px;background:var(--line)}
+.pq-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pq-card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 10px 6px;min-width:0}
+.pq-card h3{margin:0 0 2px;font-size:12.5px;font-weight:900;color:var(--txt);display:flex;justify-content:space-between;align-items:baseline}
+.pq-card h3 small{font-size:10.5px;font-weight:600;color:var(--mut)}
+.pq-plot{height:250px}
+.pq-empty{display:flex;align-items:center;justify-content:center;height:100%;color:var(--mut);font-size:12px;font-weight:600}
+.pq-note{font-size:10.5px;color:#9A5A00;background:#FFF4E0;border-radius:6px;padding:4px 8px;margin-top:4px;display:none}
+
+/* ---------- ERRO / LOADING ---------- */
+.pq-alert{display:none;background:#FFF0F2;border:1px solid #FFC7D0;color:#9B1230;border-radius:8px;
+  padding:8px 12px;margin-bottom:8px;font-size:12px;font-weight:700;justify-content:space-between;align-items:center;gap:8px}
+.pq-alert button{border:0;background:var(--coral);color:#fff;border-radius:6px;padding:5px 10px;font-weight:800;font-size:11px;cursor:pointer}
+.pq-load{position:fixed;inset:0;background:rgba(11,18,32,.55);backdrop-filter:blur(3px);display:none;
+  align-items:center;justify-content:center;z-index:9999}
+.pq-load-box{background:var(--ink);color:#fff;border-radius:10px;padding:16px 22px;font-weight:800;font-size:13px;
+  box-shadow:0 20px 60px rgba(0,0,0,.4);border-left:4px solid var(--cyan);min-width:300px}
+.pq-load-box small{display:block;color:#8FA0BC;font-weight:600;margin-top:4px;font-size:11px}
+.pq-bar{height:3px;background:#22304D;border-radius:3px;margin-top:10px;overflow:hidden}
+.pq-bar i{display:block;height:100%;width:35%;background:var(--cyan);animation:pq-run 1.1s linear infinite}
+@keyframes pq-run{from{margin-left:-35%}to{margin-left:100%}}
+
+/* ---------- INVESTIGACAO POR CONTRATO ---------- */
+.pq-inv{background:var(--ink);border-radius:12px;padding:12px 14px;margin-top:14px;color:#fff}
+.pq-inv-top{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.pq-inv-top .t{font-size:11px;font-weight:900;letter-spacing:.14em;color:var(--cyan);text-transform:uppercase}
+.pq-inv-top .h{font-size:15px;font-weight:800}
+.pq-inv-form{display:flex;gap:8px;margin-left:auto;align-items:flex-end}
+.pq-inv-field{display:flex;flex-direction:column;gap:4px}
+.pq-inv-field label{font-size:10px;font-weight:900;letter-spacing:.12em;color:#5FE3D6;text-transform:uppercase}
+.pq-inv-form input{width:280px;height:44px;border:2px solid var(--cyan);background:#FFFFFF;color:var(--ink);
+  border-radius:8px;padding:0 12px;font-size:16px;font-weight:800;font-family:Consolas,monospace;
+  box-shadow:0 0 0 4px rgba(34,199,184,.18)}
+.pq-inv-form input::placeholder{color:#6B7486;font-weight:600;font-family:"Segoe UI",Arial,sans-serif;font-size:13px}
+.pq-inv-form input:focus{outline:none;box-shadow:0 0 0 5px rgba(34,199,184,.40)}
+.pq-inv-form button{height:44px;border:0;background:var(--cyan);color:var(--ink);border-radius:8px;padding:0 18px;
+  font-size:12px;font-weight:900;letter-spacing:.06em;cursor:pointer}
+.pq-inv-form button:hover{background:#5FE3D6}
+.pq-inv.pulse{animation:pq-pulse 1.2s ease 2}
+@keyframes pq-pulse{50%{box-shadow:0 0 0 6px rgba(34,199,184,.45)}}
+
+.pq-res{margin-top:10px}
+.pq-blk{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-top:8px}
+.pq-blk-t{font-size:10.5px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3);
+  margin-bottom:8px;display:flex;justify-content:space-between;gap:10px}
+.pq-blk-t span{color:var(--mut);letter-spacing:.02em;font-weight:700;text-transform:none}
+
+.pq-id{display:grid;grid-template-columns:repeat(4,1fr);gap:8px 14px}
+.pq-id .r{font-size:9.5px;font-weight:800;color:var(--mut);text-transform:uppercase;letter-spacing:.08em}
+.pq-id .v{font-size:13px;font-weight:800;color:var(--txt);margin-top:1px}
+.pq-id .wide{grid-column:span 2}
+.pq-tag{display:inline-block;padding:2px 8px;border-radius:5px;font-size:10.5px;font-weight:800}
+.pq-tag.red{background:#FFE6EA;color:#B0102D} .pq-tag.grn{background:#DDF5EA;color:#126B49}
+.pq-tag.amb{background:#FFF0D6;color:#8A5300} .pq-tag.gry{background:#ECEAE3;color:#4B5263}
+
+.pq-mini{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-top:10px}
+.pq-mini div{border-radius:8px;padding:6px 8px;background:#F7F5F0;border-top:3px solid var(--slate)}
+.pq-mini b{display:block;font-size:20px;font-weight:900;line-height:1.1}
+.pq-mini span{font-size:9.5px;font-weight:800;color:var(--mut);text-transform:uppercase;letter-spacing:.06em}
+.pq-mini .m1 b{color:var(--slate)}
+.pq-mini .m2{border-top-color:var(--coral)}  .pq-mini .m2 b{color:#D21F42}
+.pq-mini .m3{border-top-color:var(--green)}  .pq-mini .m3 b{color:var(--green)}
+.pq-mini .m4{border-top-color:var(--amber)}  .pq-mini .m4 b{color:#B86E00}
+.pq-mini .m5{border-top-color:var(--violet)} .pq-mini .m5 b{color:var(--violet)}
+.pq-mini .m6{border-top-color:var(--cyan)}   .pq-mini .m6 b{color:var(--cyan-d)}
+
+/* tabelas sem rolagem horizontal no notebook */
+.pq-tw{max-height:300px;overflow-y:auto;border:1px solid var(--line);border-radius:8px}
+.pq-t{width:100%;border-collapse:collapse;table-layout:fixed;font-size:11.5px}
+.pq-t th{position:sticky;top:0;background:var(--ink2);color:#DCE3EE;font-size:10px;font-weight:800;
+  text-transform:uppercase;letter-spacing:.06em;text-align:left;padding:6px 8px;z-index:1}
+.pq-t td{padding:5px 8px;border-bottom:1px solid #EEEBE3;vertical-align:top;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+.pq-t tr:nth-child(even) td{background:#FBFAF6}
+.pq-t td.wrap{white-space:normal;word-break:break-word}
+.pq-t td.nw{white-space:nowrap}
+.pq-mono{font-family:Consolas,"Courier New",monospace;font-size:11px}
+
+/* serial incompleto na origem: digitos reais + tamanho original */
+.pq-ser-inc{font-family:Consolas,"Courier New",monospace;font-size:11px;font-weight:800;
+  color:#8A5300;border-bottom:1px dotted #B86E00;cursor:help}
+.pq-ser-dig{display:inline-block;margin-left:5px;padding:0 5px;border-radius:4px;
+  background:#FFF0D6;color:#8A5300;font-size:9.5px;font-weight:800;vertical-align:1px}
+.pq-ser-leg{font-size:10.5px;color:#8A5300;background:#FFF7E8;border:1px solid #F5DDB0;
+  border-radius:6px;padding:5px 9px;margin-bottom:6px;font-weight:600}
+
+/* ---------- RESPONSIVO ---------- */
+@media (max-width:1180px){
+  .pq-fil-grid{grid-template-columns:repeat(4,1fr)}
+  .pq-k .v{font-size:23px}
 }
-.q-universo b{font-size:21px;font-weight:950;color:#0c6470;letter-spacing:-.035em}
-.q-universo .ctx{color:#596579;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.07em}
-
-/* FILTROS - CONSOLE */
-.q-panel,.q-consulta{
-  background:rgba(255,255,255,.94);border:1px solid #ccd4e0;border-radius:14px;
-  padding:16px 18px;box-shadow:0 10px 25px rgba(17,24,39,.07);margin-bottom:14px
+@media (max-width:900px){
+  .pq-cmd{grid-template-columns:repeat(3,1fr)}
+  .pq-grid{grid-template-columns:1fr}
+  .pq-id{grid-template-columns:repeat(2,1fr)}
+  .pq-mini{grid-template-columns:repeat(3,1fr)}
+  .pq-inv-form{margin-left:0;width:100%}
+  .pq-inv-form input{flex:1;width:auto}
 }
-.q-panel{position:relative}
-.q-panel:before{content:"RECORTE OPERACIONAL";display:block;color:var(--ink-3);font-size:10px;font-weight:950;letter-spacing:.18em;margin-bottom:12px}
-.filters-grid{display:grid;grid-template-columns:repeat(7,minmax(120px,1fr));gap:12px;align-items:end}
-.f-label{display:block;color:#26364f;font-size:10px;font-weight:950;margin-bottom:6px;text-transform:uppercase;letter-spacing:.1em}
-.choices{margin:0!important}
-.choices__inner{
-  min-height:43px!important;padding:5px 9px 2px!important;border-radius:7px!important;
-  border:1px solid #bfc9d7!important;background:#f8fafc!important;font-size:12px!important;
-  box-shadow:inset 0 1px 2px rgba(17,24,39,.04)!important;transition:.16s ease!important
-}
-.choices__inner:hover{border-color:#72839b!important;background:#fff!important}
-.choices__list--multiple .choices__item{background:var(--ink-3)!important;border-color:var(--ink-3)!important;border-radius:5px!important;font-size:10px!important;font-weight:850!important}
-.choices__list--dropdown{border-radius:8px!important;box-shadow:var(--shadow)!important;border-color:#c8d0dc!important}
-.choices__list--dropdown .choices__item--selectable.is-highlighted{background:#e5f7f5!important;color:#075d62!important}
-.is-focused .choices__inner,.is-open .choices__inner{border-color:var(--cyan)!important;box-shadow:0 0 0 3px rgba(0,166,166,.12)!important;background:#fff!important}
-
-.mode-row{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:15px;padding-top:14px;border-top:1px solid #e2e8f0;flex-wrap:wrap}
-.mode-group{display:flex;gap:5px;align-items:center;padding:4px;background:#e8edf4;border-radius:9px}
-.mode-btn{border:0;background:transparent;color:#45556c;border-radius:6px;padding:10px 17px;font-size:11px;font-weight:950;letter-spacing:.05em;text-transform:uppercase;cursor:pointer;transition:.18s ease}
-.mode-btn:hover{background:#fff;color:var(--ink)}
-.mode-btn.active{background:var(--ink-2);color:#fff;box-shadow:inset 0 -3px 0 var(--signal),0 5px 15px rgba(23,32,51,.20)}
-.hint{color:#6d788a;font-size:10px;font-weight:850;text-transform:uppercase;letter-spacing:.05em}
-
-/* KPI MOSAICO */
-.kpi-grid{display:grid;grid-template-columns:1.22fr repeat(4,1fr);gap:12px;margin:16px 0 18px}
-.kpi{
-  min-height:132px;position:relative;overflow:hidden;background:#fff;border:1px solid #d1d9e5;border-radius:13px;
-  padding:20px 20px 18px;box-shadow:0 12px 28px rgba(17,24,39,.08);border-top:0;transition:.2s ease
-}
-.kpi:hover{transform:translateY(-3px);box-shadow:0 18px 32px rgba(17,24,39,.13)}
-.kpi:after{content:"";position:absolute;right:-32px;bottom:-46px;width:110px;height:110px;border:18px solid rgba(15,23,42,.055);border-radius:50%}
-.kpi:first-child{background:linear-gradient(145deg,#111827 0%,#203451 100%);border-color:#182942;color:#fff;box-shadow:0 16px 34px rgba(17,24,39,.24)}
-.kpi:first-child:before{content:"ALERTA";position:absolute;right:15px;top:15px;color:#fff;background:var(--signal);font-size:8px;font-weight:950;letter-spacing:.15em;padding:5px 7px;border-radius:4px}
-.kpi:first-child:after{border-color:rgba(103,232,224,.12)}
-.kpi:nth-child(2){border-left:5px solid var(--electric)}
-.kpi:nth-child(3){border-left:5px solid var(--amber)}
-.kpi:nth-child(4){border-left:5px solid var(--violet)}
-.kpi:nth-child(5){border-left:5px solid var(--cyan)}
-.kpi-label{color:#68758a;font-size:9px;font-weight:950;text-transform:uppercase;letter-spacing:.13em}
-.kpi:first-child .kpi-label{color:#99f6e4}
-.kpi-value{position:relative;z-index:1;margin-top:10px;color:var(--ink);font-size:34px;font-weight:950;letter-spacing:-.055em;line-height:1}
-.kpi:first-child .kpi-value{color:#fff;font-size:39px}
-.kpi-sub{position:relative;z-index:1;margin-top:8px;color:#778398;font-size:10px;font-weight:800}
-.kpi:first-child .kpi-sub{color:#cbd5e1}
-
-/* GRAFICOS COMO PAINEIS TECNICOS */
-.charts-grid{display:grid;grid-template-columns:repeat(2,minmax(360px,1fr));gap:15px;counter-reset:chart}
-.chart-card{
-  counter-increment:chart;position:relative;overflow:hidden;background:#fff;border:1px solid #cdd6e2;border-radius:14px;
-  padding:0 16px 15px;box-shadow:0 14px 30px rgba(17,24,39,.08);min-height:400px
-}
-.chart-card:before{content:"0" counter(chart);position:absolute;right:14px;top:10px;color:#a7b2c2;font-size:11px;font-weight:950;letter-spacing:.1em}
-.chart-card:nth-child(3n+1){border-top:5px solid var(--signal)}
-.chart-card:nth-child(3n+2){border-top:5px solid var(--cyan)}
-.chart-card:nth-child(3n+3){border-top:5px solid var(--violet)}
-.chart-title{
-  margin:0 -16px 8px;padding:15px 52px 13px 17px;background:linear-gradient(90deg,#f8fafc,#fff);
-  border-bottom:1px solid #e1e6ee;color:var(--ink);font-size:14px;font-weight:950;letter-spacing:-.01em;
-  display:flex;align-items:center;gap:9px;text-transform:uppercase
-}
-.chart-title:before{content:"";width:9px;height:9px;border-radius:2px;background:var(--signal);display:inline-block;box-shadow:4px 4px 0 rgba(255,35,64,.18)}
-.plot{height:332px}
-
-/* CONSULTA */
-.q-consulta{margin-top:16px;border-left:7px solid var(--violet);background:linear-gradient(100deg,#fff,#f7f5ff)}
-.q-consulta .q-eyebrow{color:var(--violet)}
-.q-busca{display:flex;gap:10px;max-width:560px;margin-top:12px}
-.q-busca input{flex:1;border:1px solid #bfc9d7;border-radius:7px;padding:11px 14px;font-size:13px;font-weight:750;color:var(--ink);background:#fff}
-.q-busca input:focus{outline:none;border-color:var(--violet);box-shadow:0 0 0 3px rgba(109,74,255,.12)}
-.q-busca button{border:none;border-radius:7px;padding:10px 24px;background:var(--violet);color:#fff;font-size:11px;font-weight:950;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;box-shadow:0 9px 20px rgba(109,74,255,.22)}
-
-.ident-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:14px;margin-top:6px}
-.ident-grid .rot{color:#778398;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.06em}
-.ident-grid .val{color:var(--ink);font-size:13.5px;font-weight:850;margin-top:2px}
-.resumo-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-top:12px}
-.resumo-grid .item{background:#eef2f7;border:1px solid #d7dee8;border-radius:8px;padding:12px;text-align:center}
-.resumo-grid .n{font-size:22px;font-weight:950;color:var(--signal);letter-spacing:-.03em}
-.resumo-grid .l{font-size:10px;color:#68758a;font-weight:900;text-transform:uppercase;margin-top:2px}
-.q-tabela{width:100%;border-collapse:collapse;font-size:12px}.q-tabela thead th{position:sticky;top:0;background:var(--ink-2);color:#fff;padding:10px 12px;font-size:10px;font-weight:900;text-align:left;white-space:nowrap;z-index:2;letter-spacing:.05em}.q-tabela tbody td{padding:8px 12px;border-bottom:1px solid #e8ecf2;white-space:nowrap;font-weight:650;color:#344157}.q-tabela tbody tr:hover td{background:#f0fdfa}.q-scroll{max-height:440px;overflow:auto;border-radius:9px;border:1px solid #d2dae5}
-.pill{display:inline-block;padding:3px 10px;border-radius:5px;font-size:10px;font-weight:900}.pill.quebra{background:#ffeaed;color:#c8102e}.pill.ok{background:#dcfce7;color:#166534}.pill.pend{background:#fff0d6;color:#9a5700}
-
-/* LOADING - VISUAL DE PROCESSAMENTO */
-.loading{position:fixed;inset:0;background:rgba(10,18,32,.72);backdrop-filter:blur(9px);display:none;align-items:center;justify-content:center;z-index:9999}
-.loading-card{min-width:320px;background:#101a2b;border:1px solid rgba(103,232,224,.35);border-radius:12px;padding:26px 30px;color:#fff;font-weight:900;text-align:center;box-shadow:0 28px 80px rgba(0,0,0,.42),inset 4px 0 0 var(--signal);letter-spacing:.03em}
-.loading-card:before{content:"";display:block;width:48px;height:4px;margin:0 auto 15px;background:linear-gradient(90deg,var(--signal),#67e8e0,var(--signal));background-size:200% 100%;animation:signal 1.1s linear infinite;border-radius:4px}
-@keyframes signal{to{background-position:-200% 0}}
-.q-vazio{text-align:center;padding:40px 20px;color:#7a8799;font-size:13px;font-weight:750}
-
-@media(max-width:1400px){.filters-grid{grid-template-columns:repeat(4,1fr)}.kpi-grid{grid-template-columns:repeat(3,1fr)}}
-@media(max-width:1280px){.filters-grid{grid-template-columns:repeat(3,1fr)}.charts-grid{grid-template-columns:1fr}}
-@media(max-width:760px){.q-hero,.q-topbar{flex-direction:column;align-items:flex-start}.kpi-grid{grid-template-columns:1fr 1fr}.filters-grid{grid-template-columns:1fr}.q-wrap{width:calc(100vw - 20px)}.q-title{font-size:32px}}
+@media print{.pq-fil,.pq-inv,.pq-load,.pq-goto{display:none!important}}
 </style>
 
-<div class="loading" id="loading">
-  <div class="loading-card">Processando sinais operacionais...</div>
+<div class="pq-load" id="pqLoad">
+  <div class="pq-load-box">Processando Safra × Quebra
+    <small id="pqLoadMsg">Primeira consulta pode levar até 1 minuto. As seguintes vêm do cache.</small>
+    <div class="pq-bar"><i></i></div>
+  </div>
 </div>
 
-<div class="q-wrap">
+<div class="pq">
 
-  <div class="q-topbar">
-    <div class="q-breadcrumb">ADM / DESCONEXÃO / QUEBRA DE AGENDA</div>
-    <div class="q-actions">
-      <button type="button" class="q-nav-btn" onclick="if (window.history.length > 1) { window.history.back(); } else { window.location.href = '/area/adm/desconexao/'; }">← Voltar</button>
-      <a class="q-nav-btn" href="/area/adm/desconexao/">Hub Desconexão</a>
-      <a class="q-nav-btn primary" href="/">Página inicial</a>
-    </div>
+  <div class="pq-alert" id="pqAlert">
+    <span id="pqAlertMsg"></span>
+    <button type="button" id="pqRetry">Tentar novamente</button>
   </div>
 
-  <section class="q-hero">
-    <div class="q-titlebox">
-      <div class="q-eyebrow">Portal Operações RNO</div>
-      <h1 class="q-title">Quebra de Agenda</h1>
-      <p class="q-sub">Inteligência de campo para localizar concentração, recorrência e responsabilidade operacional em cada quebra.</p>
-    </div>
-    <div class="q-status" id="statusText">Cache: verificando...</div>
+  <!-- FAIXA DE COMANDO -->
+  <section class="pq-cmd">
+    <div class="pq-k coral"><div class="l">Com quebra</div><div class="v" id="kQb">–</div><div class="s" id="kQbS">&nbsp;</div></div>
+    <div class="pq-k"><div class="l">Eventos</div><div class="v" id="kEv">–</div><div class="s" id="kEvS">&nbsp;</div></div>
+    <div class="pq-k amber"><div class="l">Taxa de quebra</div><div class="v" id="kTx">–</div><div class="s">quebras ÷ eventos</div></div>
+    <div class="pq-k violet"><div class="l">Contratos afetados</div><div class="v" id="kCa">–</div><div class="s" id="kCaS">&nbsp;</div></div>
+    <div class="pq-k cyan"><div class="l">Sem evento</div><div class="v" id="kSe">–</div><div class="s">contratos fora da quebra</div></div>
   </section>
 
-  <!-- ===== UNIVERSO ANALISADO ===== -->
-  <div class="q-universo" id="universo">
-    <span>Carregando...</span>
+  <div class="pq-uni">
+    <span><i class="pq-dot" id="pqDot"></i>Universo: <b id="uLin">–</b> linhas da Safra · <b id="uCon">–</b> contratos</span>
+    <span><span id="uCtx">Sem filtro</span>
+      <button type="button" class="pq-goto" id="pqGoto" title="Atalho: tecla C">🔎 Consultar contrato</button></span>
   </div>
 
-  <!-- ===== FILTROS ===== -->
-  <section class="q-panel">
-    <div class="filters-grid">
-      <div><label class="f-label" for="meses">Mês</label>
-        <select id="meses" multiple></select></div>
-      <div><label class="f-label" for="safras">Safra</label>
-        <select id="safras" multiple></select></div>
-      <div><label class="f-label" for="situacao">Situação</label>
-        <select id="situacao" multiple></select></div>
-      <div><label class="f-label" for="tipos">Tipo</label>
-        <select id="tipos" multiple></select></div>
-      <div><label class="f-label" for="ufs">UF</label>
-        <select id="ufs" multiple></select></div>
-      <div><label class="f-label" for="cids">Cidade</label>
-        <select id="cids" multiple></select></div>
-      <div><label class="f-label" for="parcs">Parceira</label>
-        <select id="parcs" multiple></select></div>
+  <!-- FILTROS -->
+  <section class="pq-fil">
+    <div class="pq-fil-grid">
+      <div><label>Mês</label><select id="meses" multiple></select></div>
+      <div><label>Safra</label><select id="safras" multiple></select></div>
+      <div><label>Situação</label><select id="situacao" multiple></select></div>
+      <div><label>Tipo</label><select id="tipos" multiple></select></div>
+      <div><label>UF</label><select id="ufs" multiple></select></div>
+      <div><label>Cidade</label><select id="cids" multiple></select></div>
+      <div><label>Parceira</label><select id="parcs" multiple></select></div>
     </div>
-    <div class="mode-row">
-      <div class="mode-group" aria-label="Modo de visualização">
-        <button class="mode-btn active" data-mode="quantidade">Quantidade</button>
-        <button class="mode-btn" data-mode="taxa">Taxa</button>
-        <button class="mode-btn" data-mode="representatividade">Representatividade</button>
+    <div class="pq-fil-foot">
+      <div class="pq-modes" id="pqModes">
+        <button type="button" data-m="quantidade" class="on">QUANTIDADE</button>
+        <button type="button" data-m="taxa">TAXA</button>
+        <button type="button" data-m="representatividade">REPRESENTATIVIDADE</button>
       </div>
-      <div class="hint">Atalhos: Q Quantidade · T Taxa · R Representatividade</div>
+      <span class="pq-hint">Atalhos Q · T · R · C &nbsp;|&nbsp; troca de modo instantânea</span>
+      <button type="button" class="pq-btn-l" id="pqClear">Limpar filtros</button>
     </div>
   </section>
 
-  <!-- ===== KPIs ===== -->
-  <section class="kpi-grid">
-    <div class="kpi">
-      <div class="kpi-label">Com Quebra</div>
-      <div class="kpi-value" id="kpiQuebra">0</div>
-      <div class="kpi-sub" id="kpiQuebraSub">eventos</div>
-    </div>
-    <div class="kpi">
-      <div class="kpi-label">Total de Eventos</div>
-      <div class="kpi-value" id="kpiEventos">0</div>
-      <div class="kpi-sub" id="kpiEventosSub">ordens de serviço</div>
-    </div>
-    <div class="kpi">
-      <div class="kpi-label">% Quebra</div>
-      <div class="kpi-value" id="kpiTaxa">0,0%</div>
-      <div class="kpi-sub">quebras ÷ eventos</div>
-    </div>
-    <div class="kpi">
-      <div class="kpi-label">Contratos Afetados</div>
-      <div class="kpi-value" id="kpiContrQuebra">0</div>
-      <div class="kpi-sub" id="kpiContrSub">da Safra</div>
-    </div>
-    <div class="kpi">
-      <div class="kpi-label">Sem Evento</div>
-      <div class="kpi-value" id="kpiSemEvento">0</div>
-      <div class="kpi-sub">contratos fora da quebra</div>
+  <!-- GRAFICOS -->
+  <div class="pq-sec">Evolução e safras</div>
+  <div class="pq-grid">
+    <div class="pq-card"><h3>Evolução mensal <small id="s1"></small></h3><div class="pq-plot" id="g1"></div></div>
+    <div class="pq-card"><h3>Por safra <small id="s2"></small></h3><div class="pq-plot" id="g2"></div>
+      <div class="pq-note" id="n2">Um contrato pode estar em mais de uma safra: a representatividade por safra não soma 100%.</div></div>
+  </div>
+
+  <div class="pq-sec">Concentração</div>
+  <div class="pq-grid">
+    <div class="pq-card"><h3>Top 10 cidades <small id="s3"></small></h3><div class="pq-plot" id="g3"></div></div>
+    <div class="pq-card"><h3>Top 10 motivos <small id="s4"></small></h3><div class="pq-plot" id="g4"></div></div>
+  </div>
+
+  <div class="pq-sec">Execução e responsabilidade</div>
+  <div class="pq-grid">
+    <div class="pq-card"><h3>Parceiras <small id="s5"></small></h3><div class="pq-plot" id="g5"></div></div>
+    <div class="pq-card"><h3>Responsável pela quebra <small id="s6"></small></h3><div class="pq-plot" id="g6"></div></div>
+  </div>
+
+  <!-- INVESTIGACAO POR CONTRATO -->
+  <section class="pq-inv" id="pqInv">
+    <div class="pq-inv-top">
+      <div><div class="t">Investigação 360°</div><div class="h">Histórico de quebra por contrato</div></div>
+      <form class="pq-inv-form" id="pqInvForm" autocomplete="off">
+        <div class="pq-inv-field">
+          <label for="pqContrato">Nº do contrato</label>
+          <input type="text" id="pqContrato" inputmode="numeric" placeholder="Digite o contrato e tecle Enter">
+        </div>
+        <button type="submit">ANALISAR</button>
+      </form>
     </div>
   </section>
-
-  <!-- ===== GRAFICOS ===== -->
-  <section class="charts-grid">
-    <div class="chart-card">
-      <h2 class="chart-title">Evolução Mensal</h2>
-      <div id="g1" class="plot"></div>
-    </div>
-    <div class="chart-card">
-      <h2 class="chart-title">Por Safra</h2>
-      <div id="g2" class="plot"></div>
-    </div>
-    <div class="chart-card">
-      <h2 class="chart-title">Top 10 Cidades</h2>
-      <div id="g3" class="plot"></div>
-    </div>
-    <div class="chart-card">
-      <h2 class="chart-title">Top 10 Motivos</h2>
-      <div id="g4" class="plot"></div>
-    </div>
-    <div class="chart-card">
-      <h2 class="chart-title">Parceiras</h2>
-      <div id="g5" class="plot"></div>
-    </div>
-    <div class="chart-card">
-      <h2 class="chart-title">Responsável pela Quebra</h2>
-      <div id="g6" class="plot"></div>
-    </div>
-  </section>
-
-  <!-- ===== CONSULTA POR CONTRATO ===== -->
-  <section class="q-consulta">
-    <div class="q-eyebrow">Consulta</div>
-    <h2 style="margin:2px 0 0;font-size:17px;font-weight:950;
-               letter-spacing:-.03em;color:var(--text)">
-      Histórico de quebra por contrato</h2>
-    <div class="q-busca">
-      <input type="text" id="inpContrato" placeholder="Número do contrato (CD_NET)">
-      <button id="btnBuscar">Buscar</button>
-    </div>
-  </section>
-
-  <div id="resConsulta"></div>
+  <div class="pq-res" id="pqRes"></div>
 
 </div>
 
 <script>
 (function(){
+  "use strict";
 
-  // =================================================================
+  // ================================================================
   // CONFIGURACAO
-  // =================================================================
+  // ================================================================
   const API = "/dash/quebra-rno/api";
-  const ids = ['meses','safras','situacao','tipos','ufs','cids','parcs'];
-  const rotulos = {
-    meses:'Mês', safras:'Safra', situacao:'Situação', tipos:'Tipo',
-    ufs:'UF', cids:'Cidade', parcs:'Parceira'
-  };
+  const TIMEOUT_MS = 120000;
+  const IDS = ["meses","safras","situacao","tipos","ufs","cids","parcs"];
+  const ROT = {meses:"Mês",safras:"Safra",situacao:"Situação",tipos:"Tipo",ufs:"UF",cids:"Cidade",parcs:"Parceira"};
+  const C = {slate:"#3A4A66", coral:"#FF3B5C", amber:"#F2A33A"};
 
+  const nf = new Intl.NumberFormat("pt-BR");
+  const fInt = v => nf.format(Math.round(Number(v||0)));
+  const fPct = v => Number(v||0).toFixed(1).replace(".",",") + "%";
+  const esc = s => String(s==null?"":s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+  let modo = "quantidade";
+  let charts = {};
+  let ctrl = null, timer = null, deb = null;
+  let _upd = false;
   const choices = {};
-  let _updating = false;
-  let controller = null;
-  let currentMode = 'quantidade';
-  let ultimoKpis = null;
-  // MODO_LOCAL_JS_ATIVO: resposta-base usada nos tres modos visuais.
-  let ultimoCharts = {};
+  const $ = id => document.getElementById(id);
 
-  const fmtInt = new Intl.NumberFormat('pt-BR');
-  const loading = document.getElementById('loading');
-
-  function showLoading(flag){ loading.style.display = flag ? 'flex' : 'none'; }
-  function fmtPct(v){ return Number(v||0).toFixed(1).replace('.',',') + '%'; }
-
-  // =================================================================
-  // CHOICES
-  // =================================================================
-  function selected(id){
-    const c = choices[id];
-    if (!c) return [];
-    return c.getValue(true).filter(Boolean);
+  function loading(on){
+    $("pqLoad").style.display = on ? "flex" : "none";
+    $("pqDot").classList.toggle("busy", on);
+  }
+  function alerta(msg){
+    $("pqAlert").style.display = msg ? "flex" : "none";
+    $("pqAlertMsg").textContent = msg || "";
   }
 
-  function queryParams(){
-    const params = new URLSearchParams();
-    // O modo e exclusivamente visual e nao gera chamada ao backend.
-    ids.forEach(id => selected(id).forEach(v => params.append(id, v)));
-    return params;
+  // ================================================================
+  // SERIAL INCOMPLETO NA ORIGEM
+  // ----------------------------------------------------------------
+  // O CSV traz parte dos seriais como "8,32E+14". So os digitos antes
+  // do E sao reais; o restante foi perdido quando o arquivo foi salvo
+  // pelo Excel. Exibimos apenas os digitos reais + tamanho original.
+  //   tamanho = digitos da parte inteira + expoente
+  //   "8,32E+14"   -> parte inteira "8" (1) + 14 = 15 digitos
+  //   "1,43E+19"   -> 1 + 19 = 20 digitos
+  // O banco nao e alterado; isto e somente exibicao.
+  // ================================================================
+  const RE_CIENT = /^\s*(-?)(\d+)(?:[.,](\d+))?[eE]\+?(\d+)\s*$/;
+
+  function analisarSerial(valor){
+    const original = String(valor == null ? "" : valor).trim();
+    const m = RE_CIENT.exec(original);
+    if (!m){
+      return {incompleto:false, original, texto: original || "–"};
+    }
+    const inteira = m[2], decimal = m[3] || "", exp = parseInt(m[4], 10);
+    const digitos = inteira + decimal;               // digitos que chegaram no arquivo
+    const total = inteira.length + exp;              // tamanho original do serial
+    return {incompleto:true, original, digitos, total, texto: digitos + "…"};
   }
 
-  function setOptions(id, values){
-    const c = choices[id];
-    if (!c) return;
-    const keep = new Set(selected(id));
-    const opts = (values||[]).map(v => ({
-      value:String(v), label:String(v), selected:keep.has(String(v))
-    }));
-    _updating = true;
-    c.clearStore();
-    c.setChoices(opts, 'value', 'label', true);
-    _updating = false;
+  function serialHtml(valor){
+    const s = analisarSerial(valor);
+    if (!s.incompleto) return '<span class="pq-mono">' + esc(s.texto) + '</span>';
+    const dica = "Serial incompleto na origem.\n" +
+                 "Chegaram no arquivo apenas os " + s.digitos.length + " primeiros dígitos (" + s.digitos + ").\n" +
+                 "Tamanho original: " + s.total + " dígitos.\n" +
+                 "O último dígito exibido pode ter sido arredondado pelo Excel.\n" +
+                 "Valor gravado no banco: " + s.original;
+    return '<span class="pq-ser-inc" title="' + esc(dica) + '">' + esc(s.texto) + '</span>' +
+           '<span class="pq-ser-dig">' + s.total + ' díg.</span>';
   }
 
-  let filterTimer;
-  function scheduleRefresh(){ clearTimeout(filterTimer); filterTimer = setTimeout(refresh, 250); }
-  function initChoices(){
-    ids.forEach(id => {
-      choices[id] = new Choices(document.getElementById(id), {
-        removeItemButton:true, shouldSort:false, searchEnabled:true,
-        placeholder:true, placeholderValue:'Todos', itemSelectText:'',
-        noResultsText:'Sem resultados', noChoicesText:'Sem opções'
-      });
-      document.getElementById(id).addEventListener('addItem',
-        () => { if (!_updating) scheduleRefresh(); });
-      document.getElementById(id).addEventListener('removeItem',
-        () => { if (!_updating) scheduleRefresh(); });
+  // ================================================================
+  // FILTROS
+  // ================================================================
+  IDS.forEach(id => {
+    const el = $(id);
+    choices[id] = new Choices(el, {
+      removeItemButton:true, shouldSort:false, searchEnabled:true,
+      placeholder:true, placeholderValue:"Todos", itemSelectText:"",
+      noResultsText:"Sem resultados", noChoicesText:"Sem opções"
     });
-  }
-
-  // =================================================================
-  // UNIVERSO
-  // =================================================================
-  function updateUniverso(k){
-    const sel = ids
-      .map(id => ({id, vals:selected(id)}))
-      .filter(x => x.vals.length);
-
-    const ctx = sel.length
-      ? sel.map(x => rotulos[x.id] + ': ' + (x.vals.length > 2
-          ? x.vals.length + ' selecionados' : x.vals.join(', '))).join(' · ')
-      : 'Sem filtro · ' + fmtInt.format(k.municipios||0) + ' municípios · '
-        + fmtInt.format(k.parceiras||0) + ' parceiras';
-
-    document.getElementById('universo').innerHTML =
-      '<span>Universo analisado: <b>' + fmtInt.format(k.linhas||0) +
-      '</b> linhas da Safra · <b>' + fmtInt.format(k.contratos||0) +
-      '</b> contratos</span><span class="ctx">' + ctx + '</span>';
-  }
-
-  // =================================================================
-  // KPIs
-  // =================================================================
-  function updateKpis(k){
-    ultimoKpis = k;
-    document.getElementById('kpiQuebra').textContent =
-      fmtInt.format(k.quebras||0);
-    document.getElementById('kpiQuebraSub').textContent =
-      'de ' + fmtInt.format(k.eventos||0) + ' eventos';
-    document.getElementById('kpiEventos').textContent =
-      fmtInt.format(k.eventos||0);
-    document.getElementById('kpiEventosSub').textContent =
-      fmtInt.format(k.sem_quebra||0) + ' sem quebra';
-    document.getElementById('kpiTaxa').textContent =
-      k.taxa_quebra_label || '0,0%';
-    document.getElementById('kpiContrQuebra').textContent =
-      fmtInt.format(k.contr_quebra||0);
-    document.getElementById('kpiContrSub').textContent =
-      k.pct_contratos_label + ' dos contratos';
-    document.getElementById('kpiSemEvento').textContent =
-      fmtInt.format(k.sem_evento||0);
-    updateUniverso(k);
-  }
-
-  // =================================================================
-  // GRAFICOS
-  // =================================================================
-  function modeLabel(){
-    if (currentMode === 'taxa') return 'Taxa (%)';
-    if (currentMode === 'representatividade') return 'Representatividade (%)';
-    return 'Quantidade de quebras';
-  }
-
-  function pickColors(n){
-    const arr = Array(n).fill('#ADB5BD');
-    if (n > 0) arr[0] = '#E60000';
-    if (n > 1) arr[1] = '#1976D2';
-    if (n > 2) arr[2] = '#F9A825';
-    if (n > 3) arr[3] = '#2E7D32';
-    return arr;
-  }
-
-  function renderBar(id, data){
-    const horizontal = ['g3','g4','g5','g6'].includes(id);
-    const labels = data.labels || [];
-    const custom = data.customdata || [];
-    // A API entrega todos os valores-base em customdata. A selecao do
-    // modo ocorre aqui, sem HTTP, SQL ou alteracao do cache.
-    const values = custom.map(item => {
-      if (currentMode === 'taxa') return Number(item.taxa || 0);
-      if (currentMode === 'representatividade') {
-        return Number(item.representatividade || 0);
-      }
-      return Number(item.quebras || 0);
-    });
-
-    if (!labels.length){
-      Plotly.purge(id);
-      document.getElementById(id).innerHTML =
-        '<div class="q-vazio">Sem dados para os filtros</div>';
-      return;
-    }
-
-    const eixo = horizontal ? '%{y}' : '%{x}';
-    const valor = horizontal ? '%{x:,.0f}' : '%{y:,.0f}';
-    const valorPct = horizontal ? '%{x:.2f}' : '%{y:.2f}';
-
-    const linhaValor = currentMode === 'quantidade'
-      ? '<b>Quebras:</b> ' + valor + '<br>'
-      : '<b>' + modeLabel() + ':</b> ' + valorPct + '%<br>';
-
-    const trace = {
-      type:'bar',
-      orientation: horizontal ? 'h' : 'v',
-      x: horizontal ? values : labels,
-      y: horizontal ? labels : values,
-      customdata: custom,
-      marker:{
-        color: values.map((v,i) => {
-          const normal = ['#273b59','#00a6a6','#6d4aff','#d8890b','#50708f'];
-          return v === Math.max(...values) ? '#ff2340' : normal[i % normal.length];
-        }),
-        line:{color:'rgba(255,255,255,.72)',width:1}
-      },
-      hovertemplate:'<b>' + eixo + '</b><br>' + linhaValor +
-        '<b>Eventos:</b> %{customdata.eventos:,.0f}<br>' +
-        '<b>Quebras:</b> %{customdata.quebras:,.0f}<br>' +
-        '<b>Taxa:</b> %{customdata.taxa:.2f}%<br>' +
-        '<b>Representatividade:</b> %{customdata.representatividade:.2f}%<br>' +
-        '<b>Contratos:</b> %{customdata.contratos:,.0f}<extra></extra>',
-      text: values.map(v => currentMode === 'quantidade'
-        ? fmtInt.format(v)
-        : (Number(v).toFixed(1).replace('.',',') + '%')),
-      textposition:'auto',
-      cliponaxis:false
-    };
-
-    const layout = {
-      margin: horizontal ? {l:175,r:28,t:12,b:34} : {l:56,r:20,t:12,b:52},
-      paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
-      font:{family:'Segoe UI, Arial, sans-serif', color:'#26364f', size:12},
-      xaxis:{title: horizontal ? modeLabel() : '',
-             gridcolor:'#DCE3EC', zeroline:false,
-             tickangle: horizontal ? 0 : -25},
-      yaxis:{title: horizontal ? '' : modeLabel(),
-             gridcolor:'#DCE3EC', zeroline:false, automargin:true},
-      hoverlabel:{bgcolor:'#111827', font:{color:'#FFFFFF'},
-                  bordercolor:'#202234'},
-      bargap: horizontal ? .34 : .18
-    };
-
-    RNOViz.react(id, [trace], layout, {displayModeBar:false, responsive:true});
-  }
-
-  // =================================================================
-  // STATUS
-  // =================================================================
-  async function status(){
-    try{
-      const r = await RNORequest.fetch(API + '/status');
-      const j = await r.json();
-      const rows = j.rows ? fmtInt.format(j.rows) : '0';
-      document.getElementById('statusText').textContent =
-        j.loaded ? ('Quebra: ' + rows + ' eventos · ' + (j.meses||0) + ' meses')
-                 : 'Cache: aguardando carga';
-    } catch(e){
-      document.getElementById('statusText').textContent = 'Cache: indisponível';
-    }
-  }
-
-  // =================================================================
-  // REFRESH
-  // =================================================================
-  async function refresh(){
-    if (controller) controller.abort();
-    controller = new AbortController();
-    showLoading(true);
-
-    try{
-      const r = await RNORequest.fetch(API + '/refresh?' + queryParams().toString(),
-                            {signal: controller.signal});
-      const j = await r.json();
-
-      if (!j.ok) throw new Error(j.error || 'Falha no refresh');
-
-      ids.forEach(id => setOptions(id, j.options[id] || []));
-      updateKpis(j.kpis || {});
-      ultimoCharts = j.charts || {};
-      Object.entries(ultimoCharts).forEach(([id, data]) => renderBar(id, data));
-
-      const rows = j.diag && j.diag.rows ? fmtInt.format(j.diag.rows) : '';
-      document.getElementById('statusText').textContent =
-        rows ? ('Eventos no filtro: ' + rows) : 'Sem eventos';
-
-    } catch(e){
-      if (e.name !== 'AbortError'){
-        console.error(e);
-        document.getElementById('statusText').textContent = 'Erro: ' + e.message;
-      }
-    } finally {
-      showLoading(false);
-    }
-  }
-
-  // =================================================================
-  // MODO
-  // =================================================================
-  function setMode(mode){
-    if (!['quantidade','taxa','representatividade'].includes(mode)) return;
-    currentMode = mode;
-    document.querySelectorAll('.mode-btn').forEach(btn =>
-      btn.classList.toggle('active', btn.dataset.mode === mode));
-
-    // Redesenho local: zero fetch, zero SQL e zero overlay.
-    Object.entries(ultimoCharts).forEach(([id, data]) => renderBar(id, data));
-  }
-
-  document.querySelectorAll('.mode-btn').forEach(btn =>
-    btn.addEventListener('click', () => setMode(btn.dataset.mode)));
-
-  document.addEventListener('keydown', (ev) => {
-    if (ev.target && ['INPUT','TEXTAREA','SELECT'].includes(ev.target.tagName))
-      return;
-    const k = ev.key.toLowerCase();
-    if (k === 'q') setMode('quantidade');
-    if (k === 't') setMode('taxa');
-    if (k === 'r') setMode('representatividade');
+    el.addEventListener("addItem",    () => { if(!_upd) agendar(); });
+    el.addEventListener("removeItem", () => { if(!_upd) agendar(); });
   });
 
-  // =================================================================
-  // CONSULTA POR CONTRATO
-  // =================================================================
-  async function buscar(){
-    const c = document.getElementById('inpContrato').value.trim();
-    const area = document.getElementById('resConsulta');
-    if (!c){ area.innerHTML = ''; return; }
+  function sel(id){ const v = choices[id].getValue(true); return Array.isArray(v) ? v : (v ? [v] : []); }
 
-    area.innerHTML = '<div class="q-panel"><div class="q-vazio">Buscando...</div></div>';
+  function setOpts(id, vals){
+    const c = choices[id], keep = new Set(sel(id));
+    _upd = true;
+    try{
+      c.clearStore();
+      c.setChoices((vals||[]).map(v => ({value:String(v),label:String(v),selected:keep.has(String(v))})),
+                   "value","label",true);
+    } finally { _upd = false; }
+  }
+
+  function params(){
+    const p = new URLSearchParams();
+    IDS.forEach(id => sel(id).forEach(v => p.append(id, v)));
+    return p;
+  }
+
+  function agendar(){ clearTimeout(deb); deb = setTimeout(refresh, 450); }
+
+  // ================================================================
+  // CARGA
+  // ================================================================
+  async function refresh(){
+    if (ctrl) ctrl.abort();
+    ctrl = new AbortController();
+    clearTimeout(timer);
+    let estourou = false;
+    timer = setTimeout(() => { estourou = true; ctrl.abort(); }, TIMEOUT_MS);
+
+    alerta("");
+    loading(true);
+    try{
+      const r = await fetch(API + "/refresh?" + params().toString(), {signal: ctrl.signal});
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error || j.erro || "Falha na API");
+
+      IDS.forEach(id => setOpts(id, (j.options||{})[id]));
+      kpis(j.kpis || {});
+      charts = j.charts || {};
+      desenharTudo();
+    } catch(e){
+      if (e.name === "AbortError" && !estourou) return;
+      alerta(estourou
+        ? "A consulta passou de 2 minutos. O servidor continua processando: clique em Tentar novamente em instantes (virá do cache)."
+        : "Erro ao carregar: " + e.message);
+    } finally {
+      clearTimeout(timer);
+      loading(false);
+    }
+  }
+
+  // ================================================================
+  // KPIs E UNIVERSO
+  // ================================================================
+  function kpis(k){
+    $("kQb").textContent = fInt(k.quebras);
+    $("kQbS").textContent = "de " + fInt(k.eventos) + " eventos";
+    $("kEv").textContent = fInt(k.eventos);
+    $("kEvS").textContent = fInt(k.sem_quebra) + " sem quebra";
+    $("kTx").textContent = k.taxa_quebra_label || fPct(k.taxa_quebra);
+    $("kCa").textContent = fInt(k.contr_quebra);
+    $("kCaS").textContent = (k.pct_contratos_label || fPct(k.pct_contratos)) + " dos contratos";
+    $("kSe").textContent = fInt(k.sem_evento);
+    $("uLin").textContent = fInt(k.linhas);
+    $("uCon").textContent = fInt(k.contratos);
+
+    const ativos = IDS.map(id => ({id, v:sel(id)})).filter(x => x.v.length);
+    $("uCtx").textContent = ativos.length
+      ? ativos.map(x => ROT[x.id] + ": " + (x.v.length > 2 ? x.v.length + " sel." : x.v.join(", "))).join(" · ")
+      : "Sem filtro · " + fInt(k.municipios) + " municípios · " + fInt(k.parceiras) + " parceiras";
+  }
+
+  // ================================================================
+  // GRAFICOS - modo local, sem HTTP
+  // ================================================================
+  function valor(it){
+    if (modo === "taxa") return Number(it.taxa||0);
+    if (modo === "representatividade") return Number(it.representatividade||0);
+    return Number(it.quebras||0);
+  }
+  const rotEixo = () => modo === "taxa" ? "Taxa (%)" : modo === "representatividade" ? "Repres. (%)" : "Quebras";
+  const txt = v => modo === "quantidade" ? fInt(v) : fPct(v);
+
+  function desenhar(id){
+    const el = $(id), d = charts[id] || {};
+    const labels = d.labels || [], cd = d.customdata || [];
+    if (!labels.length){ Plotly.purge(el); el.innerHTML = '<div class="pq-empty">Sem dados para o recorte</div>'; return; }
+    if (el.querySelector(".pq-empty")) el.innerHTML = "";
+
+    const h = !["g1","g2"].includes(id);
+    let L = labels.slice(), V = cd.map(valor), D = cd.slice();
+
+    if (h){
+      const ord = V.map((v,i)=>i).sort((a,b)=>V[a]-V[b]);
+      L = ord.map(i=>L[i]); V = ord.map(i=>V[i]); D = ord.map(i=>D[i]);
+    }
+    const max = Math.max(...V);
+    const cores = V.map(v => v === max ? C.coral : (modo === "taxa" ? C.amber : C.slate));
+    const curto = L.map(s => String(s).length > 30 ? String(s).slice(0,29) + "…" : s);
+
+    const trace = {
+      type:"bar", orientation: h ? "h" : "v",
+      x: h ? V : curto, y: h ? curto : V,
+      customdata: D.map((c,i) => [c.eventos||0, c.quebras||0, c.taxa||0, c.representatividade||0, c.contratos||0, L[i]]),
+      marker:{color:cores},
+      text: V.map(txt), textposition:"outside", cliponaxis:false,
+      textfont:{size:11, color:"#141B2B", family:"Segoe UI"},
+      hovertemplate:
+        "<b>%{customdata[5]}</b><br>Eventos: %{customdata[0]:,.0f}<br>Quebras: %{customdata[1]:,.0f}" +
+        "<br>Taxa: %{customdata[2]:.1f}%<br>Repres.: %{customdata[3]:.1f}%<br>Contratos: %{customdata[4]:,.0f}<extra></extra>"
+    };
+
+    const lay = {
+      margin: h ? {l:150,r:46,t:6,b:26} : {l:46,r:10,t:18,b:34},
+      paper_bgcolor:"rgba(0,0,0,0)", plot_bgcolor:"rgba(0,0,0,0)",
+      font:{family:"Segoe UI, Arial", size:11, color:"#3A4459"},
+      xaxis: h ? {gridcolor:"#ECE8DE", zeroline:false, title:{text:rotEixo(),font:{size:10}}}
+               : {tickfont:{size:10.5}, type:"category"},
+      yaxis: h ? {tickfont:{size:10.5}, automargin:false}
+               : {gridcolor:"#ECE8DE", zeroline:false, title:{text:rotEixo(),font:{size:10}}},
+      bargap: h ? .3 : .22, separators:",.",
+      hoverlabel:{bgcolor:"#0B1220", bordercolor:"#22C7B8", font:{color:"#fff", size:11}}
+    };
+    Plotly.react(el, [trace], lay, {displayModeBar:false, responsive:true});
+  }
+
+  function desenharTudo(){
+    ["g1","g2","g3","g4","g5","g6"].forEach(desenhar);
+    $("n2").style.display = modo === "representatividade" ? "block" : "none";
+    ["s1","s2","s3","s4","s5","s6"].forEach(s => $(s).textContent = rotEixo());
+  }
+
+  function setModo(m){
+    if (!["quantidade","taxa","representatividade"].includes(m)) return;
+    modo = m;
+    document.querySelectorAll("#pqModes button").forEach(b => b.classList.toggle("on", b.dataset.m === m));
+    desenharTudo();
+  }
+  document.querySelectorAll("#pqModes button").forEach(b => b.addEventListener("click", () => setModo(b.dataset.m)));
+
+  function irParaContrato(){
+    const box = $("pqInv");
+    box.scrollIntoView({behavior:"smooth", block:"center"});
+    box.classList.remove("pulse"); void box.offsetWidth; box.classList.add("pulse");
+    setTimeout(() => $("pqContrato").focus(), 350);
+  }
+  $("pqGoto").addEventListener("click", irParaContrato);
+
+  document.addEventListener("keydown", e => {
+    if (["INPUT","TEXTAREA","SELECT"].includes((e.target||{}).tagName)) return;
+    const k = (e.key||"").toLowerCase();
+    if (k === "q") setModo("quantidade");
+    if (k === "t") setModo("taxa");
+    if (k === "r") setModo("representatividade");
+    if (k === "c"){ e.preventDefault(); irParaContrato(); }
+  });
+
+  $("pqClear").addEventListener("click", () => {
+    _upd = true; IDS.forEach(id => choices[id].removeActiveItems()); _upd = false;
+    refresh();
+  });
+  $("pqRetry").addEventListener("click", refresh);
+
+  // ================================================================
+  // INVESTIGACAO POR CONTRATO
+  // ================================================================
+  async function investigar(ev){
+    if (ev) ev.preventDefault();
+    const c = $("pqContrato").value.trim();
+    const area = $("pqRes");
+    if (!c){ area.innerHTML = ""; return; }
+    area.innerHTML = '<div class="pq-blk"><div class="pq-empty" style="height:60px">Consultando contrato…</div></div>';
 
     try{
-      const r = await RNORequest.fetch(API + '/consulta?contrato=' + encodeURIComponent(c));
-      const j = await r.json();
+      const j = await (await fetch(API + "/consulta?contrato=" + encodeURIComponent(c))).json();
+      if (!j.ok){ area.innerHTML = '<div class="pq-blk"><div class="pq-empty" style="height:60px">' + esc(j.erro) + '</div></div>'; return; }
+      if (!j.encontrado){ area.innerHTML = '<div class="pq-blk"><div class="pq-empty" style="height:60px">Contrato&nbsp;<b>' + esc(c) + '</b>&nbsp;não encontrado</div></div>'; return; }
 
-      if (!j.ok){
-        area.innerHTML = '<div class="q-panel"><div class="q-vazio">' +
-                         j.erro + '</div></div>';
-        return;
-      }
-      if (!j.encontrado){
-        area.innerHTML = '<div class="q-panel"><div class="q-vazio">Contrato <b>' +
-                         c + '</b> não encontrado</div></div>';
-        return;
-      }
+      const i = j.identificacao || {}, r = j.resumo || {};
+      const st = String(i.status||"");
+      const stCls = /DESCONECT/i.test(st) ? "red" : /CONECT|ATIV/i.test(st) ? "grn" : "gry";
 
-      const i = j.identificacao, rs = j.resumo;
       let h = '';
 
-      // identificacao
-      h += '<section class="q-panel"><div class="q-eyebrow">Contrato ' +
-           i.contrato + '</div><div class="ident-grid">' +
-           '<div><div class="rot">Operadora</div><div class="val">' + i.operadora + '</div></div>' +
-           '<div><div class="rot">Município</div><div class="val">' + i.municipio + '</div></div>' +
-           '<div><div class="rot">UF</div><div class="val">' + i.uf + '</div></div>' +
-           '<div><div class="rot">Regional</div><div class="val">' + i.regional + '</div></div>' +
-           '<div><div class="rot">Cluster</div><div class="val">' + i.cluster + '</div></div>' +
-           '<div><div class="rot">Parceira</div><div class="val">' + i.parceira + '</div></div>' +
-           '<div><div class="rot">Status</div><div class="val">' + i.status + '</div></div>' +
-           '</div>';
+      h += '<div class="pq-blk"><div class="pq-blk-t">Identidade operacional <span>Contrato ' + esc(i.contrato || c) + '</span></div>' +
+        '<div class="pq-id">' +
+          '<div><div class="r">Cidade / UF</div><div class="v">' + esc(i.municipio) + ' / ' + esc(i.uf) + '</div></div>' +
+          '<div><div class="r">Operadora</div><div class="v">' + esc(i.operadora) + '</div></div>' +
+          '<div><div class="r">Regional</div><div class="v">' + esc(i.regional) + '</div></div>' +
+          '<div><div class="r">Cluster</div><div class="v">' + esc(i.cluster) + '</div></div>' +
+          '<div><div class="r">Parceira</div><div class="v">' + esc(i.parceira || "–") + '</div></div>' +
+          '<div class="wide"><div class="r">Status do contrato</div><div class="v"><span class="pq-tag ' + stCls + '">' + esc(st || "–") + '</span></div></div>' +
+        '</div>' +
+        '<div class="pq-mini">' +
+          '<div class="m1"><b>' + fInt(r.eventos) + '</b><span>Eventos</span></div>' +
+          '<div class="m2"><b>' + fInt(r.com_quebra) + '</b><span>Com quebra</span></div>' +
+          '<div class="m3"><b>' + fInt(r.sem_quebra) + '</b><span>Sem quebra</span></div>' +
+          '<div class="m4"><b>' + fPct(r.taxa) + '</b><span>Taxa</span></div>' +
+          '<div class="m5"><b>' + fInt(r.linhas_safra) + '</b><span>Linhas Safra</span></div>' +
+          '<div class="m6"><b>' + fInt(r.meses) + '</b><span>Meses</span></div>' +
+        '</div></div>';
 
-      // resumo
-      h += '<div class="resumo-grid">' +
-           '<div class="item"><div class="n">' + rs.eventos + '</div>' +
-             '<div class="l">eventos</div></div>' +
-           '<div class="item"><div class="n">' + rs.com_quebra + '</div>' +
-             '<div class="l">com quebra</div></div>' +
-           '<div class="item"><div class="n">' + rs.sem_quebra + '</div>' +
-             '<div class="l">sem quebra</div></div>' +
-           '<div class="item"><div class="n">' + fmtPct(rs.taxa) + '</div>' +
-             '<div class="l">taxa</div></div>' +
-           '<div class="item"><div class="n">' + rs.linhas_safra + '</div>' +
-             '<div class="l">linhas safra</div></div>' +
-           '<div class="item"><div class="n">' + rs.meses + '</div>' +
-             '<div class="l">meses</div></div>' +
-           '</div></section>';
-
-      // safra
-      if (j.safra.length){
-        h += '<section class="q-panel"><h2 class="chart-title">Situação na Safra</h2>' +
-             '<div class="q-scroll"><table class="q-tabela"><thead><tr>' +
-             '<th>Mês</th><th>Safra</th><th>Tipo</th><th>Situação</th>' +
-             '<th>Dias</th><th>Equipamento</th><th>Serial</th></tr></thead><tbody>';
-        j.safra.forEach(s => {
-          h += '<tr><td>' + s.mes + '</td><td>' + s.safra + '</td>' +
-               '<td>' + s.tipo + '</td>' +
-               '<td><span class="pill ' + (s.pendencia === 'RECUPERADO' ? 'ok' : 'pend') +
-               '">' + s.pendencia + '</span></td>' +
-               '<td>' + fmtInt.format(s.dias) + '</td>' +
-               '<td>' + s.equipamento + '</td><td>' + s.serial + '</td></tr>';
+      // ---- Situacao na Safra ----
+      const sf = j.safra || [];
+      if (sf.length){
+        const incompletos = sf.filter(s => analisarSerial(s.serial).incompleto).length;
+        h += '<div class="pq-blk"><div class="pq-blk-t">Situação na Safra <span>' + sf.length + ' linha(s)' +
+             (incompletos ? ' · ' + incompletos + ' serial(is) incompleto(s) na origem' : '') + '</span></div>';
+        if (incompletos){
+          h += '<div class="pq-ser-leg">Seriais marcados com <b>…</b> chegaram incompletos no arquivo da Safra. ' +
+               'Exibimos só os dígitos reais e o tamanho original. Passe o mouse para ver o valor gravado no banco.</div>';
+        }
+        h += '<div class="pq-tw"><table class="pq-t"><colgroup>' +
+            '<col style="width:9%"><col style="width:7%"><col style="width:13%"><col style="width:12%">' +
+            '<col style="width:6%"><col style="width:33%"><col style="width:20%"></colgroup>' +
+          '<thead><tr><th>Mês</th><th>Safra</th><th>Tipo</th><th>Situação</th><th>Dias</th><th>Equipamento</th><th>Serial</th></tr></thead><tbody>';
+        sf.forEach(s => {
+          const pend = s.pendencia === "PENDENTE";
+          h += '<tr><td class="nw">' + esc(s.mes) + '</td><td class="nw">' + esc(s.safra) + '</td>' +
+               '<td class="nw" title="' + esc(s.tipo) + '">' + esc(s.tipo) + '</td>' +
+               '<td><span class="pq-tag ' + (pend ? "amb" : "grn") + '">' + esc(s.pendencia) + '</span></td>' +
+               '<td class="nw">' + fInt(s.dias) + '</td>' +
+               '<td class="wrap">' + esc(s.equipamento) + '</td>' +
+               '<td class="nw">' + serialHtml(s.serial) + '</td></tr>';
         });
-        h += '</tbody></table></div></section>';
+        h += '</tbody></table></div></div>';
       }
 
-      // eventos de quebra
-      if (j.eventos.length){
-        h += '<section class="q-panel"><h2 class="chart-title">Eventos de Quebra · ' +
-             j.eventos.length + '</h2>' +
-             '<div class="q-scroll"><table class="q-tabela"><thead><tr>' +
-             '<th>Data</th><th>OS</th><th>Tratamento</th><th>Status</th>' +
-             '<th>Motivo</th><th>Responsável</th><th>Cenário</th>' +
-             '<th>Parceira</th><th>Técnico</th><th>Bairro</th>' +
-             '</tr></thead><tbody>';
-        j.eventos.forEach(e => {
-          const cq = e.tratamento.indexOf('COM QUEBRA') >= 0;
-          h += '<tr><td>' + e.data + '</td><td>' + e.os + '</td>' +
-               '<td><span class="pill ' + (cq ? 'quebra' : 'ok') + '">' +
-               e.tratamento + '</span></td>' +
-               '<td>' + e.status + '</td><td>' + e.motivo + '</td>' +
-               '<td>' + e.responsavel + '</td><td>' + e.cenario + '</td>' +
-               '<td>' + e.parceira + '</td><td>' + e.tecnico + '</td>' +
-               '<td>' + e.bairro + '</td></tr>';
+      // ---- Eventos de quebra ----
+      const evs = j.eventos || [];
+      if (evs.length){
+        h += '<div class="pq-blk"><div class="pq-blk-t">Eventos de quebra <span>' + evs.length + ' evento(s) · passe o mouse para detalhes</span></div>' +
+          '<div class="pq-tw"><table class="pq-t"><colgroup>' +
+            '<col style="width:10%"><col style="width:11%"><col style="width:10%"><col style="width:29%">' +
+            '<col style="width:15%"><col style="width:12%"><col style="width:13%"></colgroup>' +
+          '<thead><tr><th>Data</th><th>OS</th><th>Quebra</th><th>Motivo</th><th>Responsável</th><th>Parceira</th><th>Técnico</th></tr></thead><tbody>';
+        evs.forEach(e => {
+          const cq = /COM QUEBRA/i.test(e.tratamento||"");
+          const tip = ["Status: " + (e.status||"–"), "Cenário: " + (e.cenario||"–"), "Período: " + (e.periodo||"–"),
+                       "Cód. baixa: " + (e.cod_baixa||"–"), "Bairro: " + (e.bairro||"–"), "Empresa: " + (e.empresa||"–")].join("\n");
+          h += '<tr title="' + esc(tip) + '"><td class="nw">' + esc(String(e.data||"").slice(0,10)) + '</td>' +
+               '<td class="nw pq-mono">' + esc(e.os) + '</td>' +
+               '<td><span class="pq-tag ' + (cq ? "red" : "grn") + '">' + (cq ? "QUEBRA" : "OK") + '</span></td>' +
+               '<td class="wrap">' + esc(e.motivo || "–") + '</td>' +
+               '<td class="wrap">' + esc(e.responsavel || "–") + '</td>' +
+               '<td class="nw" title="' + esc(e.parceira) + '">' + esc(e.parceira || "–") + '</td>' +
+               '<td class="nw" title="' + esc(e.tecnico) + '">' + esc(e.tecnico || "–") + '</td></tr>';
         });
-        h += '</tbody></table></div></section>';
+        h += '</tbody></table></div></div>';
       }
 
       area.innerHTML = h;
-
     } catch(e){
-      area.innerHTML = '<div class="q-panel"><div class="q-vazio">' +
-                       e.message + '</div></div>';
+      area.innerHTML = '<div class="pq-blk"><div class="pq-empty" style="height:60px">' + esc(e.message) + '</div></div>';
     }
   }
+  $("pqInvForm").addEventListener("submit", investigar);
 
-  document.getElementById('btnBuscar').addEventListener('click', buscar);
-  document.getElementById('inpContrato').addEventListener('keypress', e => {
-    if (e.key === 'Enter') buscar();
-  });
-
-  // =================================================================
-  // INICIALIZACAO
-  // =================================================================
-  initChoices();
+  // ================================================================
+  // INICIO
+  // ================================================================
   refresh();
-
 })();
 </script>
-
 {% endblock %}
